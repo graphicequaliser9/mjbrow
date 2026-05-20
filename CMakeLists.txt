@@ -1,40 +1,41 @@
 cmake_minimum_required(VERSION 3.10)
 project(NitrogenBrowser VERSION 0.1.0 LANGUAGES CXX)
 
-# Set C++ standard to C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Detect compiler and set appropriate flags
-if(MSVC)
-    # MSVC specific flags
-    add_compile_options(/W4 /permissive- /bigobj)
-elseif(MINGW)
-    # MinGW specific flags
-    add_compile_options(-Wall -Wextra)
-else()
-    # GCC/Clang
-    add_compile_options(-Wall -Wextra)
-endif()
-
-# Source files
-set(SOURCES
+set(CORE_SOURCES
     src/main.cpp
 )
+source_group("" FILES ${CORE_SOURCES})
 
-# Include directories
-include_directories(include)
+add_executable(${PROJECT_NAME} WIN32 ${CORE_SOURCES})
 
-# Create executable
-add_executable(${PROJECT_NAME} ${SOURCES})
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# Set target properties for Windows subsystem (GUI application)
-if(WIN32)
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        WIN32_EXECUTABLE TRUE
-    )
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    _UNICODE
+    UNICODE
+)
+
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /permissive- /bigobj /utf-8)
+elseif(WIN32)
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
+else()
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
 endif()
 
-# Install rules (optional)
-install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    user32
+    gdi32
+    kernel32
+    advapi32
+)
+
+include(GNUInstallDirs)
+install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
