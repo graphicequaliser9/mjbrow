@@ -8,6 +8,7 @@ HINSTANCE hInst;
 HWND hWndMain;
 HWND hWndToolbar;
 HWND hWndUrlBar;
+int cyToolbar = 0;
 
 // Forward declarations
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -25,10 +26,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // Set DPI awareness
     // Try to use SetProcessDpiAwareness (Windows 8.1+)
     typedef HRESULT (WINAPI *SetProcessDpiAwarenessFn)(PROCESS_DPI_AWARENESS);
-    SetProcessDpiAwarenessFn pSetProcessDpiAwareness = 
+    SetProcessDpiAwarenessFn pSetProcessDpiAwareness =
         (SetProcessDpiAwarenessFn)GetProcAddress(GetModuleHandle(L"shcore.dll"), "SetProcessDpiAwareness");
     if (pSetProcessDpiAwareness) {
-        pSetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+        HRESULT hr = pSetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+        if (FAILED(hr)) {
+            // DPI awareness failed, continue anyway
+        }
     } else {
         // Fallback to older method
         SetProcessDPIAware();
@@ -52,7 +56,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
 
-    RegisterClass(&wc);
+    ATOM atom = RegisterClass(&wc);
+    if (atom == 0) {
+        MessageBox(nullptr, L"Window registration failed!", L"Error", MB_ICONERROR);
+        return 0;
+    }
 
     // Create the main window
     hWndMain = CreateWindowEx(
@@ -80,6 +88,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     ShowWindow(hWndMain, nCmdShow);
     UpdateWindow(hWndMain);
 
+    // Resize toolbar after window is shown
+    if (hWndToolbar) {
+        SendMessage(hWndToolbar, TB_AUTOSIZE, 0, 0);
+    }
+
     // Message loop
     MSG msg = {};
     while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -93,30 +106,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_CREATE:
-            // Toolbar already created in WinMain after window creation
             return 0;
 
         case WM_SIZE:
-            // Resize the toolbar and URL bar
-            if (hWndToolbar) {
-                // Toolbar height is typically fixed, we'll let it auto-size
-                SendMessage(hWndToolbar, TB_AUTOSIZE, 0, 0);
-                
-                // Position the URL bar to the right of the toolbar buttons
-                RECT rcToolbar;
-                GetClientRect(hWndToolbar, &rcToolbar);
-                
-                // Get the rectangle of the separator (item index 3) to position the URL bar
-                // Items: 0=Back, 1=Forward, 2=Reload, 3=Separator
+            // Position the URL bar to the right of the toolbar buttons
+            if (hWndToolbar && cyToolbar > 0) {
+                RECT rcClient;
+                GetClientRect(hWnd, &rcClient);
+
+                // Position toolbar at top
+                SetWindowPos(hWndToolbar, nullptr, 0, 0, rcClient.right, cyToolbar, SWP_NOZORDER);
+
+                // Position URL bar to the right of separator (item index 3)
                 RECT rcSep;
                 SendMessage(hWndToolbar, TB_GETITEMRECT, 3, (LPARAM)&rcSep);
-                
-                // Position URL bar: start after separator, full height of toolbar
-                int urlBarX = rcSep.right + 2; // Small padding after separator
-                int urlBarY = 2; // Small top padding
-                int urlBarWidth = rcToolbar.right - urlBarX - 2; // Right padding
-                int urlBarHeight = rcToolbar.bottom - 4; // Top and bottom padding
-                
+
+                int urlBarX = rcSep.right + 2;
+                int urlBarY = 2;
+                int urlBarWidth = rcClient.right - urlBarX - 2;
+                int urlBarHeight = cyToolbar - 4;
+
                 if (hWndUrlBar) {
                     SetWindowPos(hWndUrlBar, nullptr, urlBarX, urlBarY, urlBarWidth, urlBarHeight, SWP_NOZORDER | SWP_NOACTIVATE);
                 }
@@ -174,15 +183,21 @@ HWND CreateToolbar(HWND hWndParent) {
     SendMessage(hWndToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM)sizeof(TBBUTTON), 0);
 
     // Define the toolbar buttons (back, forward, reload, separator)
+    // Explicitly initialize all TBBUTTON members to avoid indeterminate values
     TBBUTTON tbButtons[] = {
-        {0, ID_BACK, TBSTATE_ENABLED, BTNS_BUTTON, {0}, 0, (INT_PTR)L"Back"},
-        {1, ID_FORWARD, TBSTATE_ENABLED, BTNS_BUTTON, {0}, 0, (INT_PTR)L"Forward"},
-        {2, ID_RELOAD, TBSTATE_ENABLED, BTNS_BUTTON, {0}, 0, (INT_PTR)L"Reload"},
-        {3, 0, TBSTATE_ENABLED, BTNS_SEP, {0}, 0, 0} // Separator
+        {I_IMAGENONE, ID_BACK, TBSTATE_ENABLED, BTNS_BUTTON, {0}, 0, (INT_PTR)L"Back"},
+        {I_IMAGENONE, ID_FORWARD, TBSTATE_ENABLED, BTNS_BUTTON, {0}, 0, (INT_PTR)L"Forward"},
+        {I_IMAGENONE, ID_RELOAD, TBSTATE_ENABLED, BTNS_BUTTON, {0}, 0, (INT_PTR)L"Reload"},
+        {I_IMAGENONE, 0, TBSTATE_ENABLED, BTNS_SEP, {0}, 0, 0} // Separator
     };
 
     // Add buttons to the toolbar
     SendMessage(hWndToolbar, TB_ADDBUTTONS, (WPARAM)(sizeof(tbButtons)/sizeof(tbButtons[0])), (LPARAM)&tbButtons);
+
+    // Get the toolbar height for later use in WM_SIZE
+    RECT rc;
+    GetWindowRect(hWndToolbar, &rc);
+    cyToolbar = rc.bottom - rc.top;
 
     // Create the URL bar as an edit box child of the toolbar
     hWndUrlBar = CreateWindowEx(
