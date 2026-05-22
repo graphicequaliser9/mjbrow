@@ -21,6 +21,15 @@ endif()
 # Source files
 set(SOURCES
     src/main.cpp
+    src/js/Value.cpp
+    src/js/Heap.cpp
+    src/js/GC.cpp
+    src/js/Parser.cpp
+    src/js/BytecodeCompiler.cpp
+    src/js/VM.cpp
+    src/js/Promise.cpp
+    src/js/JSContext.cpp
+    src/js/DOMBindings.cpp
 )
 
 # Include directories
