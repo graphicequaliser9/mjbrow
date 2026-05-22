@@ -1,40 +1,60 @@
 cmake_minimum_required(VERSION 3.10)
 project(NitrogenBrowser VERSION 0.1.0 LANGUAGES CXX)
 
-# Set C++ standard to C++17
+# ── C++ standard ──────────────────────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Detect compiler and set appropriate flags
+# ── Compiler flags ────────────────────────────────────────────────────────────
 if(MSVC)
-    # MSVC specific flags
     add_compile_options(/W4 /permissive- /bigobj)
 elseif(MINGW)
-    # MinGW specific flags
-    add_compile_options(-Wall -Wextra)
+    add_compile_options(-Wall -Wextra -Wpedantic)
 else()
-    # GCC/Clang
-    add_compile_options(-Wall -Wextra)
+    add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Source files
-set(SOURCES
+# ── Include directories ───────────────────────────────────────────────────────
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
+# ── Sources ───────────────────────────────────────────────────────────────────
+#
+# Cross-platform sources (compile everywhere)
+set(CROSS_PLATFORM_SOURCES
     src/main.cpp
+    src/net/HttpClient.cpp
+    src/html/HTMLParser.cpp
+    src/css/CSSParser.cpp
+    src/js/VM.cpp
+    src/render/Painter.cpp
+    src/layout/Box.cpp
+    src/util/String.cpp
+    src/util/Memory.cpp
+    src/util/Logging.cpp
 )
 
-# Include directories
-include_directories(include)
+# Windows-only sources (guarded with #ifdef _WIN32 in headers / stubs)
+set(WINDOWS_SOURCES
+    src/core/Win32Window.cpp
+)
 
-# Create executable
-add_executable(${PROJECT_NAME} ${SOURCES})
+# Assemble per-platform source lists
+set(NITROGEN_SOURCES ${CROSS_PLATFORM_SOURCES})
 
-# Set target properties for Windows subsystem (GUI application)
+if(WIN32)
+    list(APPEND NITROGEN_SOURCES ${WINDOWS_SOURCES})
+endif()
+
+# ── Executable ────────────────────────────────────────────────────────────────
+add_executable(${PROJECT_NAME} ${NITROGEN_SOURCES})
+
+# Windows subsystem (GUI app).  Omit this flag on Linux/macOS so that stdout works.
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
 endif()
 
-# Install rules (optional)
+# ── Install ───────────────────────────────────────────────────────────────────
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
