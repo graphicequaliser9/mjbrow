@@ -32,6 +32,13 @@ set(CROSS_PLATFORM_SOURCES
     src/util/String.cpp
     src/util/Memory.cpp
     src/util/Logging.cpp
+    src/browser/Tab.cpp
+    src/browser/Bookmarks.cpp
+    src/browser/URLBar.cpp
+    src/browser/SettingsPanel.cpp
+    src/browser/BrowserUI.cpp
+    src/devtools/DOMInspector.cpp
+    src/devtools/PaintProfiler.cpp
 )
 
 # Windows-only sources (guarded with #ifdef _WIN32 in headers / stubs)
