@@ -1,6 +1,7 @@
-#include <iostream>
+#include "core/Win32Window.h"
 
 int main() {
-    std::cout << "Nitrogen Browser - Scaffold Initialized" << std::endl;
-    return 0;
+    core::Win32Window window;
+    window.create();
+    return window.run();
 }

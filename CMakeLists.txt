@@ -21,6 +21,7 @@ endif()
 # Source files
 set(SOURCES
     src/main.cpp
+    src/core/Win32Window.cpp
 )
 
 # Include directories
