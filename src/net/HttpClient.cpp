@@ -21,14 +21,6 @@ HttpClient::~HttpClient() {
     // Placeholder
 }
 
-// Placeholder for HttpResponse class
-class HttpResponse {
-public:
-    int status = 0;
-    std::map<std::string, std::string> headers;
-    std::vector<uint8_t> body;
-};
-
 HttpResponse HttpClient::sendRequest(const std::string& /*url*/, const std::string& /*method*/) {
     HttpResponse response;
     response.status = 200; // Placeholder
