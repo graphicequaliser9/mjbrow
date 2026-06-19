@@ -9,19 +9,25 @@
 #define CORE_WIN32WINDOW_H
 
 #ifdef _WIN32
+
+#include <functional>
+#include <windows.h>
+
 namespace core {
 
 class Win32Window {
 public:
-    Win32Window();
+    explicit Win32Window(std::function<void(double)> frameCallback);
     ~Win32Window();
 
     /// @brief Runs the message pump and returns the exit code.
     int run();
 
 private:
-    // Window handle
-    void* hwnd_; // Using void* to avoid including Windows.h in header
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+    void* hwnd_;
+    std::function<void(double)> frameCallback_;
 };
 
 } // namespace core

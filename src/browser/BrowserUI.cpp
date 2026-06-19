@@ -71,16 +71,6 @@ std::string BrowserUI::currentUrl() const {
 }
 
 void BrowserUI::run(const std::string& initialUrl) {
-#ifdef _WIN32
-    window_ = std::make_unique<core::Win32Window>();
-    if (window_) {
-        util::Log(util::LogLevel::Info, "BrowserUI: window created, starting message pump\n");
-    }
-#else
-    util::Log(util::LogLevel::Info, "BrowserUI: headless stub run()\n");
-#endif
-
-    // Seed the first tab with the home / start URL
     if (!initialUrl.empty()) {
         auto tab = std::make_unique<Tab>(initialUrl);
         tabs_.push_back(std::move(tab));
@@ -88,13 +78,16 @@ void BrowserUI::run(const std::string& initialUrl) {
         urlBar_->setCurrentUrl(initialUrl);
     }
 
-    // If the message pump is owned by Win32Window, hook DevTools overlay here
 #ifdef _WIN32
-    // Win32Window::run() owns the real message loop; we run a frame tick roughly
-    // 60 FPS (~16 ms sleep) next to it via a WM_TIMER posted from the real loop.
-    window_->run();
+    window_ = std::make_unique<core::Win32Window>([this](double dtMs) {
+        onFrame(dtMs);
+    });
+    if (window_) {
+        util::Log(util::LogLevel::Info, "BrowserUI: window created, starting message pump\n");
+        window_->run();
+    }
 #else
-    // Headless stub – advance one tick so the test harness can inspect state
+    util::Log(util::LogLevel::Info, "BrowserUI: headless stub run()\n");
     if (activeTab()) activeTab()->tick(16.0);
 #endif
 }
