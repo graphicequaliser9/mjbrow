@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <system_error>
 
 namespace browser {
 
@@ -146,96 +147,103 @@ const BookmarkEntry* Bookmarks::findById(const std::string& id) const {
 }
 
 void Bookmarks::load() {
-    std::ifstream f(filePath_);
-    if (!f.is_open()) {
-        util::Log(util::LogLevel::Info, "Bookmarks: no saved file at " + filePath_ + "\n");
-        return;
+    try {
+        std::ifstream f(filePath_);
+        if (!f.is_open()) {
+            util::Log(util::LogLevel::Info, "Bookmarks: no saved file at " + filePath_ + "\n");
+            return;
+        }
+
+        std::string line;
+        std::string content;
+        while (std::getline(f, line)) {
+            content += line + "\n";
+        }
+        f.close();
+
+        // Find each entry block by scanning for "{" ... "}," sequences
+        size_t searchPos = 0;
+        while (true) {
+            auto openBrace = content.find('{', searchPos);
+            if (openBrace == std::string::npos) break;
+            auto closeBrace = content.find('}', openBrace);
+            if (closeBrace == std::string::npos) break;
+
+            std::string block = content.substr(openBrace, closeBrace - openBrace + 1);
+            searchPos = closeBrace + 1;
+
+            auto findInBlock = [&](const std::string& key) -> std::string {
+                std::string marker = "\"" + key + "\"";
+                auto pos = block.find(marker);
+                if (pos == std::string::npos) return "";
+                pos = block.find('"', block.find(':', pos) + 1);
+                if (pos == std::string::npos) return "";
+                ++pos;
+                auto end = block.find('"', pos);
+                if (end == std::string::npos) return "";
+                return block.substr(pos, end - pos);
+            };
+
+            auto findBoolInBlock = [&](const std::string& key) -> bool {
+                std::string marker = "\"" + key + "\"";
+                auto pos = block.find(marker);
+                if (pos == std::string::npos) return false;
+                pos = block.find(':', pos);
+                if (pos == std::string::npos) return false;
+                ++pos;
+                while (pos < block.size() && (block[pos] == ' ' || block[pos] == '\t')) ++pos;
+                return block[pos] == 't' || block[pos] == '1';
+            };
+
+            std::string id = findInBlock("id");
+            if (id.empty()) continue;
+
+            auto entry = std::make_unique<BookmarkEntry>();
+            entry->id       = id;
+            entry->title    = findInBlock("title");
+            entry->url      = findInBlock("url");
+            entry->parentId = findInBlock("parentId");
+            entry->isFolder = findBoolInBlock("isFolder");
+            entries_.push_back(std::move(entry));
+        }
+
+        dirty_ = false;
+        util::Log(util::LogLevel::Info,
+                  "Bookmarks: loaded " + std::to_string(entries_.size()) + " entries\n");
+    } catch (std::system_error& e) {
+        util::Log(util::LogLevel::Error,
+                  "Bookmarks: failed to load " + filePath_ + ": " + e.what() + "\n");
     }
-
-    std::string line;
-    std::string content;
-    while (std::getline(f, line)) {
-        content += line + "\n";
-    }
-    f.close();
-
-    // Find each entry block by scanning for "{" ... "}," sequences
-    size_t searchPos = 0;
-    while (true) {
-        auto openBrace = content.find('{', searchPos);
-        if (openBrace == std::string::npos) break;
-        auto closeBrace = content.find('}', openBrace);
-        if (closeBrace == std::string::npos) break;
-
-        std::string block = content.substr(openBrace, closeBrace - openBrace + 1);
-        searchPos = closeBrace + 1;
-
-        // Save original position to search within
-        std::string tmp = content;
-
-        auto findInBlock = [&](const std::string& key) -> std::string {
-            std::string marker = "\"" + key + "\"";
-            auto pos = block.find(marker);
-            if (pos == std::string::npos) return "";
-            pos = block.find('"', block.find(':', pos) + 1);
-            if (pos == std::string::npos) return "";
-            ++pos;
-            auto end = block.find('"', pos);
-            if (end == std::string::npos) return "";
-            return block.substr(pos, end - pos);
-        };
-
-        auto findBoolInBlock = [&](const std::string& key) -> bool {
-            std::string marker = "\"" + key + "\"";
-            auto pos = block.find(marker);
-            if (pos == std::string::npos) return false;
-            pos = block.find(':', pos);
-            if (pos == std::string::npos) return false;
-            ++pos;
-            while (pos < block.size() && (block[pos] == ' ' || block[pos] == '\t')) ++pos;
-            return block[pos] == 't' || block[pos] == '1';
-        };
-
-        std::string id = findInBlock("id");
-        if (id.empty()) continue;
-
-        auto entry = std::make_unique<BookmarkEntry>();
-        entry->id       = id;
-        entry->title    = findInBlock("title");
-        entry->url      = findInBlock("url");
-        entry->parentId = findInBlock("parentId");
-        entry->isFolder = findBoolInBlock("isFolder");
-        entries_.push_back(std::move(entry));
-    }
-
-    dirty_ = false;
-    util::Log(util::LogLevel::Info,
-              "Bookmarks: loaded " + std::to_string(entries_.size()) + " entries\n");
 }
 
 void Bookmarks::save() {
-    if (!dirty_) return;
+    try {
+        if (!dirty_) return;
 
-    std::ofstream f(filePath_);
-    if (!f.is_open()) {
-        util::Log(util::LogLevel::Error, "Bookmarks: cannot open " + filePath_ + " for writing\n");
-        return;
-    }
+        std::ofstream f(filePath_);
+        if (!f.is_open()) {
+            util::Log(util::LogLevel::Error, "Bookmarks: cannot open " + filePath_ + " for writing\n");
+            return;
+        }
 
-    f << "{\n  \"entries\": [\n";
-    for (size_t i = 0; i < entries_.size(); ++i) {
-        const auto& e = entries_[i];
-        f << "    {\n";
-        writeJsonField(f, "id",        e->id);
-        writeJsonField(f, "title",     e->title);
-        writeJsonField(f, "url",       e->url);
-        writeJsonField(f, "parentId",  e->parentId);
-        f << "    \"isFolder\": " << (e->isFolder ? "true" : "false") << "\n";
-        f << "    }" << (i + 1 < entries_.size() ? "," : "") << "\n";
+        f << "{\n  \"entries\": [\n";
+        for (size_t i = 0; i < entries_.size(); ++i) {
+            const auto& e = entries_[i];
+            f << "    {\n";
+            writeJsonField(f, "id",        e->id);
+            writeJsonField(f, "title",     e->title);
+            writeJsonField(f, "url",       e->url);
+            writeJsonField(f, "parentId",  e->parentId);
+            f << "    \"isFolder\": " << (e->isFolder ? "true" : "false") << "\n";
+            f << "    }" << (i + 1 < entries_.size() ? "," : "") << "\n";
+        }
+        f << "  ]\n}\n";
+        f.close();
+        dirty_ = false;
+    } catch (std::system_error& e) {
+        util::Log(util::LogLevel::Error,
+                  "Bookmarks: failed to save " + filePath_ + ": " + e.what() + "\n");
     }
-    f << "  ]\n}\n";
-    f.close();
-    dirty_ = false;
 }
 
 } // namespace browser
