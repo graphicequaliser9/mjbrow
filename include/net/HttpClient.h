@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <cstdint>
 
 namespace net {
 
@@ -26,7 +27,7 @@ struct HttpResponse {
     /**
      * @brief Raw response body bytes (decoded from transport bytes).
      */
-    std::vector<unsigned char> body;
+    std::vector<uint8_t> body;
 };
 
 class HttpClient {
@@ -43,7 +44,30 @@ public:
     HttpResponse sendRequest(const std::string& url, const std::string& method = "GET");
 
 private:
-    // Placeholder for internal state
+    struct ParsedUrl {
+        std::string scheme;
+        std::string host;
+        int port{0};
+        std::string path;
+    };
+
+    /**
+     * @brief Parses a URL into its components.
+     * @param url   The URL to parse.
+     * @param out   Output parsed components.
+     * @return True if parsing succeeded.
+     */
+    bool parseUrl(const std::string& url, ParsedUrl& out);
+
+    /**
+     * @brief Performs the request using WinHTTP.
+     */
+    HttpResponse fetchWinHTTP(const ParsedUrl& parsed, const std::string& method);
+
+    /**
+     * @brief Performs the request using WinInet as fallback.
+     */
+    HttpResponse fetchWinInet(const ParsedUrl& parsed, const std::string& method);
 };
 
 } // namespace net
