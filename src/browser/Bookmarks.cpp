@@ -14,6 +14,10 @@
 #include <sstream>
 #include <algorithm>
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)  // getenv is deprecated in MSVC, but we use it for portability
+#endif
+
 namespace browser {
 
 // ── mini JSON helpers (no external deps) ─────────────────────────────────
@@ -146,11 +150,12 @@ const BookmarkEntry* Bookmarks::findById(const std::string& id) const {
 }
 
 void Bookmarks::load() {
-    std::ifstream f(filePath_);
-    if (!f.is_open()) {
-        util::Log(util::LogLevel::Info, "Bookmarks: no saved file at " + filePath_ + "\n");
-        return;
-    }
+    try {
+        std::ifstream f(filePath_);
+        if (!f.is_open()) {
+            util::Log(util::LogLevel::Info, "Bookmarks: no saved file at " + filePath_ + "\n");
+            return;
+        }
 
     std::string line;
     std::string content;
@@ -209,33 +214,42 @@ void Bookmarks::load() {
     }
 
     dirty_ = false;
-    util::Log(util::LogLevel::Info,
-              "Bookmarks: loaded " + std::to_string(entries_.size()) + " entries\n");
+        util::Log(util::LogLevel::Info,
+                  "Bookmarks: loaded " + std::to_string(entries_.size()) + " entries\n");
+    } catch (const std::system_error&) {
+        // Gracefully handle filesystem access errors on Windows
+        util::Log(util::LogLevel::Warn, "Bookmarks: filesystem error on load, skipping\n");
+    }
 }
 
 void Bookmarks::save() {
     if (!dirty_) return;
 
-    std::ofstream f(filePath_);
-    if (!f.is_open()) {
-        util::Log(util::LogLevel::Error, "Bookmarks: cannot open " + filePath_ + " for writing\n");
-        return;
-    }
+    try {
+        std::ofstream f(filePath_);
+        if (!f.is_open()) {
+            util::Log(util::LogLevel::Error, "Bookmarks: cannot open " + filePath_ + " for writing\n");
+            return;
+        }
 
-    f << "{\n  \"entries\": [\n";
-    for (size_t i = 0; i < entries_.size(); ++i) {
-        const auto& e = entries_[i];
-        f << "    {\n";
-        writeJsonField(f, "id",        e->id);
-        writeJsonField(f, "title",     e->title);
-        writeJsonField(f, "url",       e->url);
-        writeJsonField(f, "parentId",  e->parentId);
-        f << "    \"isFolder\": " << (e->isFolder ? "true" : "false") << "\n";
-        f << "    }" << (i + 1 < entries_.size() ? "," : "") << "\n";
+        f << "{\n  \"entries\": [\n";
+        for (size_t i = 0; i < entries_.size(); ++i) {
+            const auto& e = entries_[i];
+            f << "    {\n";
+            writeJsonField(f, "id",        e->id);
+            writeJsonField(f, "title",     e->title);
+            writeJsonField(f, "url",       e->url);
+            writeJsonField(f, "parentId",  e->parentId);
+            f << "    \"isFolder\": " << (e->isFolder ? "true" : "false") << "\n";
+            f << "    }" << (i + 1 < entries_.size() ? "," : "") << "\n";
+        }
+        f << "  ]\n}\n";
+        f.close();
+        dirty_ = false;
+    } catch (const std::system_error&) {
+        // Gracefully handle filesystem access errors on Windows
+        util::Log(util::LogLevel::Warn, "Bookmarks: filesystem error on save, skipping\n");
     }
-    f << "  ]\n}\n";
-    f.close();
-    dirty_ = false;
 }
 
 } // namespace browser

@@ -9,10 +9,18 @@
 #include "util/Logging.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
+#include <chrono>
 #include <iomanip>
 #include <sstream>
+
+// MSVC pre-C++17-compatibility guard for std::clamp
+#if __cplusplus < 201703L
+template<typename T>
+constexpr T clamp(T v, T lo, T hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+#endif
 
 namespace devtools {
 

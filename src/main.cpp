@@ -10,6 +10,14 @@
 
 #include <cstring>
 
+#ifdef _WIN32
+// Win32 GUI subsystem expects WinMain entry point
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int);
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    return main(__argc, __argv);
+}
+#endif
+
 int main(int argc, char* argv[]) {
     util::InitLogging();
     util::Log(util::LogLevel::Info, "Nitrogen Browser — bead 10 starting\n");
