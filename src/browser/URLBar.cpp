@@ -32,9 +32,6 @@ void URLBar::setFocus() {
     focused_ = true;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-security"
-
 // ── Google Suggest JSONP parser ──────────────────────────────────────────
 //
 // The API returns a JSON array of arrays:
@@ -123,8 +120,6 @@ std::vector<SuggestionItem> URLBar::parseGoogleSuggest(const std::string& raw) {
 
     return out;
 }
-
-#pragma GCC diagnostic pop
 
 void URLBar::onKeyDown(char ch) {
     if (!focused_) return;

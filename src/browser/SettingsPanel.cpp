@@ -13,6 +13,10 @@
 #include <fstream>
 #include <sstream>
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)  // getenv deprecated in MSVC
+#endif
+
 namespace browser {
 
 SettingsPanel::SettingsPanel(bool loadOnConstruct) {
@@ -64,44 +68,48 @@ void SettingsPanel::load() {
     std::string path = (home ? home : ".") + std::string("/.config/mjbrow/mjbrow_settings.json");
 #endif
 
-    std::ifstream f(path);
-    if (!f.is_open()) return;
+    try {
+        std::ifstream f(path);
+        if (!f.is_open()) return;
 
-    std::string content((std::istreambuf_iterator<char>(f)),
-                         std::istreambuf_iterator<char>());
-    f.close();
+        std::string content((std::istreambuf_iterator<char>(f)),
+                           std::istreambuf_iterator<char>());
+        f.close();
 
-    auto grabStr = [&](const std::string& key) -> std::string {
-        std::string marker = "\"" + key + "\"";
-        size_t pos = content.find(marker);
-        if (pos == std::string::npos) return "";
-        pos  = content.find(':', pos);
-        if (pos == std::string::npos) return "";
-        ++pos;
-        while (pos < content.size() && (content[pos] == ' ' || content[pos] == '\t')) ++pos;
-        if (pos < content.size() && content[pos] == '"') {
+        auto grabStr = [&](const std::string& key) -> std::string {
+            std::string marker = "\"" + key + "\"";
+            size_t pos = content.find(marker);
+            if (pos == std::string::npos) return "";
+            pos  = content.find(':', pos);
+            if (pos == std::string::npos) return "";
             ++pos;
-            auto end = content.find('"', pos);
-            return end == std::string::npos ? "" : content.substr(pos, end - pos);
+            while (pos < content.size() && (content[pos] == ' ' || content[pos] == '\t')) ++pos;
+            if (pos < content.size() && content[pos] == '"') {
+                ++pos;
+                auto end = content.find('"', pos);
+                return end == std::string::npos ? "" : content.substr(pos, end - pos);
+            }
+            return "";
+        };
+
+        std::string af = grabStr("accelMode");
+        if (!af.empty()) currentSettings_.accelMode = (af == "Direct2D")
+                                                       ? BrowserSettings::AccelMode::Direct2D
+                                                       : BrowserSettings::AccelMode::GDI;
+
+        std::string ff = grabStr("fontFamily");
+        if (!ff.empty()) currentSettings_.fontFamily = ff;
+
+        std::string fsStr = grabStr("fontSize");
+        if (!fsStr.empty()) {
+            try { currentSettings_.fontSize = std::stoi(fsStr); } catch (...) {}
         }
-        return "";
-    };
 
-    std::string af = grabStr("accelMode");
-    if (!af.empty()) currentSettings_.accelMode = (af == "Direct2D")
-                                                   ? BrowserSettings::AccelMode::Direct2D
-                                                   : BrowserSettings::AccelMode::GDI;
-
-    std::string ff = grabStr("fontFamily");
-    if (!ff.empty()) currentSettings_.fontFamily = ff;
-
-    std::string fsStr = grabStr("fontSize");
-    if (!fsStr.empty()) {
-        try { currentSettings_.fontSize = std::stoi(fsStr); } catch (...) {}
+        std::string ua = grabStr("userAgent");
+        if (!ua.empty()) currentSettings_.userAgent = ua;
+    } catch (const std::system_error&) {
+        util::Log(util::LogLevel::Warn, "SettingsPanel: filesystem error on load\n");
     }
-
-    std::string ua = grabStr("userAgent");
-    if (!ua.empty()) currentSettings_.userAgent = ua;
 }
 
 void SettingsPanel::save() {
@@ -115,18 +123,22 @@ void SettingsPanel::save() {
                         + std::string("/.config/mjbrow/mjbrow_settings.json");
 #endif
 
-    std::ofstream f(path);
-    if (!f.is_open()) return;
+    try {
+        std::ofstream f(path);
+        if (!f.is_open()) return;
 
-    std::string accelLabel = (currentSettings_.accelMode
-                              == BrowserSettings::AccelMode::Direct2D) ? "Direct2D" : "GDI";
+        std::string accelLabel = (currentSettings_.accelMode
+                                  == BrowserSettings::AccelMode::Direct2D) ? "Direct2D" : "GDI";
 
-    f << "{\n"
-      << "  \"accelMode\":   \"" << accelLabel      << "\",\n"
-      << "  \"fontFamily\":  \"" << currentSettings_.fontFamily << "\",\n"
-      << "  \"fontSize\":    "   << currentSettings_.fontSize   << ",\n"
-      << "  \"userAgent\":   \"" << currentSettings_.userAgent  << "\"\n"
-      << "}\n";
+        f << "{\n"
+          << "  \"accelMode\":   \"" << accelLabel      << "\",\n"
+          << "  \"fontFamily\":  \"" << currentSettings_.fontFamily << "\",\n"
+          << "  \"fontSize\":    "   << currentSettings_.fontSize   << ",\n"
+          << "  \"userAgent\":   \"" << currentSettings_.userAgent  << "\"\n"
+          << "}\n";
+    } catch (const std::system_error&) {
+        util::Log(util::LogLevel::Warn, "SettingsPanel: filesystem error on save\n");
+    }
 }
 
 } // namespace browser

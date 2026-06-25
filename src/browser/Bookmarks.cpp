@@ -15,6 +15,10 @@
 #include <algorithm>
 #include <system_error>
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)  // getenv is deprecated in MSVC, but we use it for portability
+#endif
+
 namespace browser {
 
 // ── mini JSON helpers (no external deps) ─────────────────────────────────
