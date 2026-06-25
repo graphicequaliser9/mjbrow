@@ -47,7 +47,7 @@ class SettingsPanel {
 public:
     using ChangeCallback = std::function<void(const BrowserSettings&)>;
 
-    SettingsPanel();
+    SettingsPanel(bool loadOnConstruct = true);
     ~SettingsPanel();
 
     /**
@@ -66,6 +66,11 @@ public:
     const BrowserSettings& settings() const { return currentSettings_; }
 
     /**
+     * @brief Loads settings from disk, leaving defaults unchanged if unavailable.
+     */
+    void load();
+
+    /**
      * @brief Whether the panel is currently open.
      */
     bool isOpen() const { return open_; }
@@ -81,7 +86,6 @@ private:
     void applyAccelMode(BrowserSettings::AccelMode mode);
     void applyUserAgent(const std::string& ua);
 
-    void load();
     void save();
 
     BrowserSettings currentSettings_;

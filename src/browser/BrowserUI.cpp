@@ -20,6 +20,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <system_error>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -43,12 +44,10 @@ namespace browser {
 BrowserUI::BrowserUI()
     : bookmarks_(std::make_unique<Bookmarks>())
     , urlBar_(std::make_unique<URLBar>())
-    , settingsPanel_(std::make_unique<SettingsPanel>())
+    , settingsPanel_(std::make_unique<SettingsPanel>(false))
     , domInspector_(std::make_unique<devtools::DOMInspector>())
     , paintProfiler_(std::make_unique<devtools::PaintProfiler>())
 {
-    bookmarks_->load();
-
     urlBar_->onNavigate([](const std::string& url) {
         util::Log(util::LogLevel::Info, "BrowserUI: navigate → " + url + "\n");
     });
@@ -58,7 +57,9 @@ BrowserUI::BrowserUI()
     });
 }
 
-BrowserUI::~BrowserUI() = default;
+BrowserUI::~BrowserUI() {
+    saveBookmarks();
+}
 
 Tab* BrowserUI::activeTab() const {
     if (tabs_.empty()) return nullptr;
@@ -70,6 +71,15 @@ std::string BrowserUI::currentUrl() const {
     return tab ? tab->url() : std::string();
 }
 
+void BrowserUI::saveBookmarks() {
+    try {
+        bookmarks_->save();
+    } catch (std::system_error& e) {
+        util::Log(util::LogLevel::Error,
+                  std::string("BrowserUI: failed to save bookmarks: ") + e.what() + "\n");
+    }
+}
+
 void BrowserUI::run(const std::string& initialUrl) {
 #ifdef _WIN32
     window_ = std::make_unique<core::Win32Window>();
@@ -79,6 +89,20 @@ void BrowserUI::run(const std::string& initialUrl) {
 #else
     util::Log(util::LogLevel::Info, "BrowserUI: headless stub run()\n");
 #endif
+
+    try {
+        bookmarks_->load();
+    } catch (std::system_error& e) {
+        util::Log(util::LogLevel::Error,
+                  std::string("BrowserUI: failed to load bookmarks: ") + e.what() + "\n");
+    }
+
+    try {
+        settingsPanel_->load();
+    } catch (std::system_error& e) {
+        util::Log(util::LogLevel::Error,
+                  std::string("BrowserUI: failed to load settings: ") + e.what() + "\n");
+    }
 
     // Seed the first tab with the home / start URL
     if (!initialUrl.empty()) {
@@ -101,6 +125,7 @@ void BrowserUI::run(const std::string& initialUrl) {
 
 void BrowserUI::quit() {
     util::Log(util::LogLevel::Info, "BrowserUI: quit\n");
+    saveBookmarks();
     tabs_.clear();
     activeIdx_ = 0;
 #ifdef _WIN32

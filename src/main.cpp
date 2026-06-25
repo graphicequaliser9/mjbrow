@@ -10,6 +10,11 @@
 
 #include <cstring>
 
+#ifdef _WIN32
+#include <cstdlib>
+#include <windows.h>
+#endif
+
 int main(int argc, char* argv[]) {
     util::InitLogging();
     util::Log(util::LogLevel::Info, "Nitrogen Browser — bead 10 starting\n");
@@ -31,3 +36,9 @@ int main(int argc, char* argv[]) {
     util::ShutdownLogging();
     return 0;
 }
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    return main(__argc, __argv);
+}
+#endif
