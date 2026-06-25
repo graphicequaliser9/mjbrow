@@ -47,7 +47,7 @@ class SettingsPanel {
 public:
     using ChangeCallback = std::function<void(const BrowserSettings&)>;
 
-    SettingsPanel(bool loadOnConstruct = true);
+    SettingsPanel();
     ~SettingsPanel();
 
     /**
@@ -55,20 +55,15 @@ public:
      */
     void open();
 
-    /**
-     * @brief Closes the settings panel and releases focus.
-     */
+/**
+      * @brief Closes the settings panel and releases focus.
+      */
     void close();
 
     /**
      * @brief Returns the current settings (reads from disk on first call).
      */
     const BrowserSettings& settings() const { return currentSettings_; }
-
-    /**
-     * @brief Loads settings from disk, leaving defaults unchanged if unavailable.
-     */
-    void load();
 
     /**
      * @brief Whether the panel is currently open.
@@ -81,6 +76,7 @@ public:
     void onChange(ChangeCallback cb) { onChangeCb_ = std::move(cb); }
 
 private:
+    void load();
     void applyFontFamily(const std::string& family);
     void applyFontSize(int size);
     void applyAccelMode(BrowserSettings::AccelMode mode);

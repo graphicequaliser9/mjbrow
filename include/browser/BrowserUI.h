@@ -154,17 +154,15 @@ private:
      */
     void activateTab(size_t index);
 
-    /**
-     * @brief Renders the DevTools + profiler overlays over the page content.
-     */
+/**
+      * @brief Renders the DevTools + profiler overlays over the page content.
+      */
     void renderDevToolsOverlay();
 
     /**
      * @brief Builds a paint profiler overlay string from the current timing data.
      */
     std::string buildProfilerOverlayText() const;
-
-    void saveBookmarks();
 
     // ── sub-systems ────────────────────────────────────────────────────────────
     std::vector<std::unique_ptr<Tab>> tabs_;   ///< All open tabs

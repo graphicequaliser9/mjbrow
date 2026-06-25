@@ -11,8 +11,14 @@
 #include <cstring>
 
 #ifdef _WIN32
-#include <cstdlib>
 #include <windows.h>
+// Win32 GUI subsystem expects WinMain entry point
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int);
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    return main(__argc, __argv);
+}
+#else
+#include <cstdlib>
 #endif
 
 int main(int argc, char* argv[]) {
@@ -36,9 +42,3 @@ int main(int argc, char* argv[]) {
     util::ShutdownLogging();
     return 0;
 }
-
-#ifdef _WIN32
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    return main(__argc, __argv);
-}
-#endif

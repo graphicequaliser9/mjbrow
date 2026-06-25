@@ -44,7 +44,7 @@ namespace browser {
 BrowserUI::BrowserUI()
     : bookmarks_(std::make_unique<Bookmarks>())
     , urlBar_(std::make_unique<URLBar>())
-    , settingsPanel_(std::make_unique<SettingsPanel>(false))
+    , settingsPanel_(std::make_unique<SettingsPanel>())
     , domInspector_(std::make_unique<devtools::DOMInspector>())
     , paintProfiler_(std::make_unique<devtools::PaintProfiler>())
 {
@@ -74,34 +74,21 @@ std::string BrowserUI::currentUrl() const {
 void BrowserUI::saveBookmarks() {
     try {
         bookmarks_->save();
-    } catch (std::system_error& e) {
-        util::Log(util::LogLevel::Error,
-                  std::string("BrowserUI: failed to save bookmarks: ") + e.what() + "\n");
+    } catch (const std::system_error&) {
+        util::Log(util::LogLevel::Warn, "BrowserUI: failed to save bookmarks\n");
     }
 }
 
 void BrowserUI::run(const std::string& initialUrl) {
 #ifdef _WIN32
     window_ = std::make_unique<core::Win32Window>();
-    if (window_) {
-        util::Log(util::LogLevel::Info, "BrowserUI: window created, starting message pump\n");
-    }
-#else
-    util::Log(util::LogLevel::Info, "BrowserUI: headless stub run()\n");
+    util::Log(util::LogLevel::Info, "BrowserUI: window created, starting message pump\n");
 #endif
 
     try {
         bookmarks_->load();
-    } catch (std::system_error& e) {
-        util::Log(util::LogLevel::Error,
-                  std::string("BrowserUI: failed to load bookmarks: ") + e.what() + "\n");
-    }
-
-    try {
-        settingsPanel_->load();
-    } catch (std::system_error& e) {
-        util::Log(util::LogLevel::Error,
-                  std::string("BrowserUI: failed to load settings: ") + e.what() + "\n");
+    } catch (const std::system_error&) {
+        util::Log(util::LogLevel::Warn, "BrowserUI: failed to load bookmarks, using defaults\n");
     }
 
     // Seed the first tab with the home / start URL

@@ -214,9 +214,8 @@ void Bookmarks::load() {
         dirty_ = false;
         util::Log(util::LogLevel::Info,
                   "Bookmarks: loaded " + std::to_string(entries_.size()) + " entries\n");
-    } catch (std::system_error& e) {
-        util::Log(util::LogLevel::Error,
-                  "Bookmarks: failed to load " + filePath_ + ": " + e.what() + "\n");
+    } catch (const std::system_error&) {
+        util::Log(util::LogLevel::Warn, "Bookmarks: filesystem error on load, skipping\n");
     }
 }
 
@@ -244,9 +243,8 @@ void Bookmarks::save() {
         f << "  ]\n}\n";
         f.close();
         dirty_ = false;
-    } catch (std::system_error& e) {
-        util::Log(util::LogLevel::Error,
-                  "Bookmarks: failed to save " + filePath_ + ": " + e.what() + "\n");
+    } catch (const std::system_error&) {
+        util::Log(util::LogLevel::Warn, "Bookmarks: filesystem error on save, skipping\n");
     }
 }
 
