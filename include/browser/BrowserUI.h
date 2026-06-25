@@ -164,6 +164,8 @@ private:
      */
     std::string buildProfilerOverlayText() const;
 
+    void saveBookmarks();
+
     // ── sub-systems ────────────────────────────────────────────────────────────
     std::vector<std::unique_ptr<Tab>> tabs_;   ///< All open tabs
     size_t                            activeIdx_{0};

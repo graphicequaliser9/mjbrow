@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <system_error>
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4996)  // getenv is deprecated in MSVC, but we use it for portability
@@ -157,75 +158,72 @@ void Bookmarks::load() {
             return;
         }
 
-    std::string line;
-    std::string content;
-    while (std::getline(f, line)) {
-        content += line + "\n";
-    }
-    f.close();
+        std::string line;
+        std::string content;
+        while (std::getline(f, line)) {
+            content += line + "\n";
+        }
+        f.close();
 
-    // Find each entry block by scanning for "{" ... "}," sequences
-    size_t searchPos = 0;
-    while (true) {
-        auto openBrace = content.find('{', searchPos);
-        if (openBrace == std::string::npos) break;
-        auto closeBrace = content.find('}', openBrace);
-        if (closeBrace == std::string::npos) break;
+        // Find each entry block by scanning for "{" ... "}," sequences
+        size_t searchPos = 0;
+        while (true) {
+            auto openBrace = content.find('{', searchPos);
+            if (openBrace == std::string::npos) break;
+            auto closeBrace = content.find('}', openBrace);
+            if (closeBrace == std::string::npos) break;
 
-        std::string block = content.substr(openBrace, closeBrace - openBrace + 1);
-        searchPos = closeBrace + 1;
+            std::string block = content.substr(openBrace, closeBrace - openBrace + 1);
+            searchPos = closeBrace + 1;
 
-        // Save original position to search within
-        std::string tmp = content;
+            auto findInBlock = [&](const std::string& key) -> std::string {
+                std::string marker = "\"" + key + "\"";
+                auto pos = block.find(marker);
+                if (pos == std::string::npos) return "";
+                pos = block.find('"', block.find(':', pos) + 1);
+                if (pos == std::string::npos) return "";
+                ++pos;
+                auto end = block.find('"', pos);
+                if (end == std::string::npos) return "";
+                return block.substr(pos, end - pos);
+            };
 
-        auto findInBlock = [&](const std::string& key) -> std::string {
-            std::string marker = "\"" + key + "\"";
-            auto pos = block.find(marker);
-            if (pos == std::string::npos) return "";
-            pos = block.find('"', block.find(':', pos) + 1);
-            if (pos == std::string::npos) return "";
-            ++pos;
-            auto end = block.find('"', pos);
-            if (end == std::string::npos) return "";
-            return block.substr(pos, end - pos);
-        };
+            auto findBoolInBlock = [&](const std::string& key) -> bool {
+                std::string marker = "\"" + key + "\"";
+                auto pos = block.find(marker);
+                if (pos == std::string::npos) return false;
+                pos = block.find(':', pos);
+                if (pos == std::string::npos) return false;
+                ++pos;
+                while (pos < block.size() && (block[pos] == ' ' || block[pos] == '\t')) ++pos;
+                return block[pos] == 't' || block[pos] == '1';
+            };
 
-        auto findBoolInBlock = [&](const std::string& key) -> bool {
-            std::string marker = "\"" + key + "\"";
-            auto pos = block.find(marker);
-            if (pos == std::string::npos) return false;
-            pos = block.find(':', pos);
-            if (pos == std::string::npos) return false;
-            ++pos;
-            while (pos < block.size() && (block[pos] == ' ' || block[pos] == '\t')) ++pos;
-            return block[pos] == 't' || block[pos] == '1';
-        };
+            std::string id = findInBlock("id");
+            if (id.empty()) continue;
 
-        std::string id = findInBlock("id");
-        if (id.empty()) continue;
+            auto entry = std::make_unique<BookmarkEntry>();
+            entry->id       = id;
+            entry->title    = findInBlock("title");
+            entry->url      = findInBlock("url");
+            entry->parentId = findInBlock("parentId");
+            entry->isFolder = findBoolInBlock("isFolder");
+            entries_.push_back(std::move(entry));
+        }
 
-        auto entry = std::make_unique<BookmarkEntry>();
-        entry->id       = id;
-        entry->title    = findInBlock("title");
-        entry->url      = findInBlock("url");
-        entry->parentId = findInBlock("parentId");
-        entry->isFolder = findBoolInBlock("isFolder");
-        entries_.push_back(std::move(entry));
-    }
-
-    dirty_ = false;
+        dirty_ = false;
         util::Log(util::LogLevel::Info,
                   "Bookmarks: loaded " + std::to_string(entries_.size()) + " entries\n");
-    } catch (const std::system_error&) {
-        // Gracefully handle filesystem access errors on Windows
-        util::Log(util::LogLevel::Warn, "Bookmarks: filesystem error on load, skipping\n");
+    } catch (std::system_error& e) {
+        util::Log(util::LogLevel::Error,
+                  "Bookmarks: failed to load " + filePath_ + ": " + e.what() + "\n");
     }
 }
 
 void Bookmarks::save() {
-    if (!dirty_) return;
-
     try {
+        if (!dirty_) return;
+
         std::ofstream f(filePath_);
         if (!f.is_open()) {
             util::Log(util::LogLevel::Error, "Bookmarks: cannot open " + filePath_ + " for writing\n");
@@ -246,9 +244,9 @@ void Bookmarks::save() {
         f << "  ]\n}\n";
         f.close();
         dirty_ = false;
-    } catch (const std::system_error&) {
-        // Gracefully handle filesystem access errors on Windows
-        util::Log(util::LogLevel::Warn, "Bookmarks: filesystem error on save, skipping\n");
+    } catch (std::system_error& e) {
+        util::Log(util::LogLevel::Error,
+                  "Bookmarks: failed to save " + filePath_ + ": " + e.what() + "\n");
     }
 }
 

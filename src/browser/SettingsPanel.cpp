@@ -19,7 +19,9 @@
 
 namespace browser {
 
-SettingsPanel::SettingsPanel() { load(); }
+SettingsPanel::SettingsPanel(bool loadOnConstruct) {
+    if (loadOnConstruct) load();
+}
 SettingsPanel::~SettingsPanel() = default;
 
 void SettingsPanel::open()  { open_ = true; }
