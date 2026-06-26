@@ -7,17 +7,19 @@
  */
 
 #include "net/HttpClient.h"
-#include <windows.h>
-#include <winhttp.h>
-#include <wininet.h>
 #include <string>
 #include <cstdint>
 #include <algorithm>
 #include <cstring>
 #include "util/Logging.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <winhttp.h>
+#include <wininet.h>
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "wininet.lib")
+#endif
 
 namespace net {
 
@@ -56,6 +58,8 @@ bool HttpClient::parseUrl(const std::string& url, ParsedUrl& out) {
     return true;
 }
 
+#ifdef _WIN32
+
 static std::string wideToAnsi(const std::wstring& wstr) {
     if (wstr.empty()) return {};
     int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
@@ -93,7 +97,9 @@ static void parseRawHeaders(const std::string& rawHeaders, std::map<std::string,
         }
     }
 }
+#endif // _WIN32
 
+#ifdef _WIN32
 HttpResponse HttpClient::fetchWinHTTP(const ParsedUrl& parsed, const std::string& method) {
     HttpResponse response;
     HINTERNET hSession = nullptr;
@@ -204,7 +210,9 @@ HttpResponse HttpClient::fetchWinHTTP(const ParsedUrl& parsed, const std::string
 
     return response;
 }
+#endif // _WIN32
 
+#ifdef _WIN32
 HttpResponse HttpClient::fetchWinInet(const ParsedUrl& parsed, const std::string& method) {
     HttpResponse response;
 
@@ -301,8 +309,10 @@ HttpResponse HttpClient::fetchWinInet(const ParsedUrl& parsed, const std::string
 
     return response;
 }
+#endif // _WIN32
 
 HttpResponse HttpClient::sendRequest(const std::string& url, const std::string& method) {
+#ifdef _WIN32
     ParsedUrl parsed;
     if (!parseUrl(url, parsed)) {
         util::Log(util::LogLevel::Warn, "HttpClient: failed to parse URL: " + url + "\n");
@@ -322,6 +332,10 @@ HttpResponse HttpClient::sendRequest(const std::string& url, const std::string& 
     }
 
     return response;
+#else
+    util::Log(util::LogLevel::Warn, "HttpClient: non-Windows stub, returning empty response for " + url + "\n");
+    return HttpResponse{};
+#endif
 }
 
 } // namespace net

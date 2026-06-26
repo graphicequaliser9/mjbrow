@@ -89,6 +89,18 @@ void Tab::clear() {
 
 js::VM* Tab::vm() const { return vm_.get(); }
 
+void Tab::goBack() {
+    if (!url_.empty()) navigate(url_);
+}
+
+void Tab::goForward() {
+    if (!url_.empty()) navigate(url_);
+}
+
+void Tab::goReload() {
+    if (!url_.empty()) navigate(url_);
+}
+
 // ── private helpers ──────────────────────────────────────────────────────
 
 void Tab::parseHTML(const std::string& html) {

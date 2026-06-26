@@ -61,6 +61,12 @@ public:
      */
     void tick(double dtMs);
 
+    // ── navigation commands ─────────────────────────────────────────────────────
+
+    void goBack();
+    void goForward();
+    void goReload();
+
     // ── state access ───────────────────────────────────────────────────────────
 
     /**
