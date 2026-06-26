@@ -115,6 +115,12 @@ public:
      */
     std::string currentUrl() const;
 
+    /**
+     * @brief Dispatches a navigation command (back / forward / reload).
+     *        Called from the Win32 WndProc on ID_BACK, ID_FORWARD, ID_RELOAD.
+     */
+    void handleCommand(const std::string& cmd);
+
     // ── DevTools ───────────────────────────────────────────────────────────────
 
     /**

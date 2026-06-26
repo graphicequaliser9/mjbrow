@@ -71,6 +71,18 @@ std::string BrowserUI::currentUrl() const {
     return tab ? tab->url() : std::string();
 }
 
+void BrowserUI::handleCommand(const std::string& cmd) {
+    if (!activeTab()) return;
+
+    if (cmd == "back" || cmd == "undo") {
+        activeTab()->goBack();
+    } else if (cmd == "forward") {
+        activeTab()->goForward();
+    } else if (cmd == "reload") {
+        activeTab()->goReload();
+    }
+}
+
 void BrowserUI::saveBookmarks() {
     try {
         bookmarks_->save();
