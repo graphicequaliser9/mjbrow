@@ -10,10 +10,16 @@
 
 #include <cstring>
 
-#ifdef _WIN32
-#include <cstdlib>
-#include <windows.h>
+// Windows headers unconditionally required because WIN32_EXECUTABLE property
+// forces /SUBSYSTEM:WINDOWS, which requires WinMain entry point.
+// WRAPPING these in #ifdef would cause LNK2019 on MSVC.
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 
 int main(int argc, char* argv[]) {
     util::InitLogging();
