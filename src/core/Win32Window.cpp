@@ -16,7 +16,7 @@ Win32Window::Win32Window() : hwnd_(nullptr) {
 
 Win32Window::~Win32Window() {
     if (hwnd_) {
-        DestroyWindow(static_cast<HWND>(hwnd_));
+        DestroyWindow(hwnd_);
     }
 }
 

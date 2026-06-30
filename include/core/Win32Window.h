@@ -8,7 +8,8 @@
 #ifndef CORE_WIN32WINDOW_H
 #define CORE_WIN32WINDOW_H
 
-#ifdef _WIN32
+#include <windows.h>
+
 namespace core {
 
 class Win32Window {
@@ -21,11 +22,9 @@ public:
 
 private:
     // Window handle
-    void* hwnd_; // Using void* to avoid including Windows.h in header
+    HWND hwnd_;
 };
 
 } // namespace core
-
-#endif // _WIN32
 
 #endif // CORE_WIN32WINDOW_H
