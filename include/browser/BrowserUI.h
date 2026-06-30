@@ -52,11 +52,16 @@ public:
 
     // ── lifecycle ──────────────────────────────────────────────────────────────
 
-    /**
-     * @brief Creates the native window and starts the message / render loop.
-     * @param initialUrl Homepage URL to load on first start.
-     */
+/**
+      * @brief Creates the native window and starts the message / render loop.
+      * @param initialUrl Homepage URL to load on first start.
+      */
     void run(const std::string& initialUrl);
+
+    /**
+      * @brief Wide-string overload for VS template integration.
+      */
+    void run(const std::wstring& initialUrlW);
 
     /**
      * @brief Gracefully closes the window and unsubscribes event hooks.
@@ -71,6 +76,13 @@ public:
      * @param dtMs Delta-time since last tick.
      */
     void onFrame(double dtMs);
+
+    /**
+     * @brief Renders the current page to the given device context.
+     * @param hdc Target device context.
+     * @param rcClip Clip rectangle for partial repaints.
+     */
+    void renderPage(HDC hdc, RECT rcClip);
 
     // ── input ──────────────────────────────────────────────────────────────────
 

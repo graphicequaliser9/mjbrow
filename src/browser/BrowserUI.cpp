@@ -310,4 +310,24 @@ void BrowserUI::renderDevToolsOverlay() {
     }
 }
 
+void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
+    // Stub: clear background and draw page content
+    if (activeTab()) {
+        // Fill with white background
+        HBRUSH hbrWhite = CreateSolidBrush(RGB(255, 255, 255));
+        FillRect(hdc, &rcClip, hbrWhite);
+        DeleteObject(hbrWhite);
+        // TODO: delegate to Painter or direct GDI text/cell drawing
+    }
+}
+
+// Wide-string overload for VS template integration
+void BrowserUI::run(const std::wstring& initialUrlW) {
+    // Convert wide string to UTF-8 string
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &initialUrlW[0], (int)initialUrlW.size(), nullptr, 0, nullptr, nullptr);
+    std::string initialUrl(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &initialUrlW[0], (int)initialUrlW.size(), &initialUrl[0], size_needed, nullptr, nullptr);
+    run(initialUrl);  // Call the std::string version
+}
+
 } // namespace browser
