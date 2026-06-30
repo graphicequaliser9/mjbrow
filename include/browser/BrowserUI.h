@@ -21,6 +21,14 @@
 #include "devtools/DOMInspector.h"
 #include "devtools/PaintProfiler.h"
 
+// Windows types needed for renderPage declaration
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 namespace browser { class WebView; }
 namespace devtools { class DOMInspector; class PaintProfiler; }
 
