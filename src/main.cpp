@@ -37,8 +37,9 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-#ifdef _WIN32
+// Win32 GUI entry point - unconditionally defined because CMake sets
+// WIN32_EXECUTABLE TRUE which requires WinMain. On non-Windows this symbol
+// is unused but harmless.
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     return main(__argc, __argv);
 }
-#endif
