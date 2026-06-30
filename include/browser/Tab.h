@@ -61,6 +61,23 @@ public:
      */
     void tick(double dtMs);
 
+    // ── navigation commands ─────────────────────────────────────────────────────
+
+    /**
+     * @brief Navigate back in history (stub implementation).
+     */
+    void goBack();
+
+    /**
+     * @brief Navigate forward in history (stub implementation).
+     */
+    void goForward();
+
+    /**
+     * @brief Reload the current page (stub implementation).
+     */
+    void goReload();
+
     // ── state access ───────────────────────────────────────────────────────────
 
     /**

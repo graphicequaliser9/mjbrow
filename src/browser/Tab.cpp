@@ -118,4 +118,16 @@ void Tab::paintFrame() {
     }
 }
 
+void Tab::goBack() {
+    if (!url_.empty()) navigate(url_);
+}
+
+void Tab::goForward() {
+    if (!url_.empty()) navigate(url_);
+}
+
+void Tab::goReload() {
+    if (!url_.empty()) navigate(url_);
+}
+
 } // namespace browser

@@ -10,9 +10,8 @@
 
 #include <cstring>
 
-// Windows headers unconditionally required because WIN32_EXECUTABLE property
-// forces /SUBSYSTEM:WINDOWS, which requires WinMain entry point.
-// WRAPPING these in #ifdef would cause LNK2019 on MSVC.
+#ifdef _WIN32
+// Windows headers required because WIN32_EXECUTABLE property forces subsystem:windows.
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -20,6 +19,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#endif
 
 int main(int argc, char* argv[]) {
     util::InitLogging();
@@ -43,9 +43,8 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-// Win32 GUI entry point - unconditionally defined because CMake sets
-// WIN32_EXECUTABLE TRUE which requires WinMain. On non-Windows this symbol
-// is unused but harmless.
+#ifdef _WIN32
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     return main(__argc, __argv);
 }
+#endif
