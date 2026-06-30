@@ -6,8 +6,6 @@
  */
 
 #include "core/Win32Window.h"
-
-#ifdef _WIN32
 #include <windows.h>
 
 namespace core {
@@ -23,10 +21,8 @@ Win32Window::~Win32Window() {
 }
 
 int Win32Window::run() {
-    // Stub: real message pump in bead 1.
+    // Stub: real message pump in bead 1 - returns immediately
     return 0;
 }
 
 } // namespace core
-
-#endif // _WIN32
