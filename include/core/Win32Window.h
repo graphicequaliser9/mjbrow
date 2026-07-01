@@ -9,7 +9,7 @@
 #ifndef CORE_WIN32WINDOW_H
 #define CORE_WIN32WINDOW_H
 
-#ifdef _WIN32
+#include <windows.h>
 
 namespace browser { class BrowserUI; }
 
@@ -30,14 +30,12 @@ private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
     void onSize(int w, int h);
-    void onPaint(const RECT& rcPaint);
+    void onPaint(HDC hdc, const RECT& rcClip);
 
     browser::BrowserUI* ui_;
-    void*                hwnd_;
+    HWND hwnd_;
 };
 
 } // namespace core
 
-#endif // _WIN32
-
-#endif // CORE_WIN32WINDOW_H
+#endif
