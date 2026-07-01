@@ -53,6 +53,22 @@ public:
      */
     void navigate(const std::string& url);
 
+    /**
+     * @brief Navigation shortcuts for toolbar/menu.
+     */
+    void goBack()    { navigate(url_); }
+    void goForward() { navigate(url_); }
+    void goReload()  { if (!url_.empty()) navigate(url_); }
+
+    // ── lifecycle ───────────────────────────────────────────────────────────────
+
+    /**
+     * @brief Navigates this tab to the given URL.
+     *        Fetches HTML, reparses, rebuilds layout, and resets the viewport.
+     * @param url The target URL.
+     */
+    void navigate(const std::string& url);
+
     // ── frame tick ─────────────────────────────────────────────────────────────
 
     /**

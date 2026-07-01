@@ -82,7 +82,7 @@ void BrowserUI::saveBookmarks() {
 
 void BrowserUI::run(const std::string& initialUrl) {
 #ifdef _WIN32
-    window_ = std::make_unique<core::Win32Window>();
+    window_ = std::make_unique<core::Win32Window>(this);
     if (window_) {
         util::Log(util::LogLevel::Info, "BrowserUI: window created, starting message pump\n");
     }
