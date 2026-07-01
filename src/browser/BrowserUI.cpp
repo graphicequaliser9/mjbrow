@@ -311,13 +311,19 @@ void BrowserUI::renderDevToolsOverlay() {
 }
 
 void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
-    // Stub: clear background and draw page content
-    if (activeTab()) {
+    if (auto* tab = activeTab()) {
         // Fill with white background
         HBRUSH hbrWhite = CreateSolidBrush(RGB(255, 255, 255));
         FillRect(hdc, &rcClip, hbrWhite);
         DeleteObject(hbrWhite);
-        // TODO: delegate to Painter or direct GDI text/cell drawing
+
+        // Draw body text if available
+        std::string text = tab->bodyText();
+        if (!text.empty()) {
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, RGB(0, 0, 0));
+            DrawTextA(hdc, text.c_str(), -1, &rcClip, DT_LEFT | DT_TOP | DT_WORDBREAK);
+        }
     }
 }
 
