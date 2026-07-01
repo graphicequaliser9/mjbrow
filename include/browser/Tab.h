@@ -56,18 +56,12 @@ public:
     /**
      * @brief Navigation shortcuts for toolbar/menu.
      */
-    void goBack()    { navigate(url_); }
-    void goForward() { navigate(url_); }
+/**
+      * @brief Navigation shortcuts for toolbar/menu.
+      */
+    void goBack()    { if (!history_.empty()) navigate(history_.back()); }
+    void goForward() { /* TODO: forward history */ }
     void goReload()  { if (!url_.empty()) navigate(url_); }
-
-    // ── lifecycle ───────────────────────────────────────────────────────────────
-
-    /**
-     * @brief Navigates this tab to the given URL.
-     *        Fetches HTML, reparses, rebuilds layout, and resets the viewport.
-     * @param url The target URL.
-     */
-    void navigate(const std::string& url);
 
     // ── frame tick ─────────────────────────────────────────────────────────────
 
@@ -93,7 +87,9 @@ public:
     /**
      * @brief Returns the root DOM node (or nullptr if no document loaded).
      */
-    html::DOMNode* document() const { return document_.get(); }
+    html::DOMNode* document() const { return documentRaw_; }
+
+    std::string bodyText() const { return bodyText_; }
 
     /**
      * @brief Returns the title for the tab strip (<title> element textContent).
@@ -140,6 +136,8 @@ private:
 
     std::string url_;                      ///< Navigated URL
     std::string rawHtml_;                  ///< Last-fetched raw source
+    std::string bodyText_;                   ///< Extracted body text for rendering
+    html::DOMNode* documentRaw_{nullptr};    ///< Raw pointer to parsed document
     std::unique_ptr<html::DOMNode> document_; ///< Live DOM tree
     std::unique_ptr<js::VM>     vm_;       ///< Per-tab JS engine
     WebView  webView_;                     ///< Viewport + scroll state

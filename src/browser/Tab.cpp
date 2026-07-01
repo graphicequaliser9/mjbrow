@@ -54,18 +54,15 @@ void Tab::navigate(const std::string& url) {
 }
 
 void Tab::tick(double dtMs) {
-    if (loading_ || !document_) return;
+    if (loading_ || !documentRaw_) return;
 
     // JS VM tick (requestAnimationFrame injection point in a full engine)
     if (vm_) {
         (void)dtMs;
-        vm_->execute("");  // stub – real VM tick in later bead
-        jsUs_ = 0.0;
+        vm_->execute("");
     }
 
-    // Repaint the active page every tick
     paintFrame();
-    paintUs_ = 0.0;
 }
 
 std::string Tab::title() const {
@@ -92,11 +89,8 @@ js::VM* Tab::vm() const { return vm_.get(); }
 // ── private helpers ──────────────────────────────────────────────────────
 
 void Tab::parseHTML(const std::string& html) {
-    static std::unique_ptr<html::HTMLParser> parser;
-    if (!parser) parser = std::make_unique<html::HTMLParser>();
-    auto* doc = parser->parse(html);
-    if (doc) doc->ownerDocument = static_cast<html::Document*>(doc);
-    document_.reset(doc);
+    static html::HTMLParser parser;
+    documentRaw_ = parser.parse(html);
 }
 
 void Tab::cascadeStyles() {
@@ -112,10 +106,11 @@ void Tab::performLayout() {
 }
 
 void Tab::paintFrame() {
-    // Stub – real paint pass calls Painter::fillRect / drawText
-    if (document_) {
-        paintUs_ = 0.0;
+    // Store parsed body text for rendering
+    if (document_ && document_->firstChild) {
+        bodyText_ = document_->firstChild->textContent;
     }
+    paintUs_ = 0.0;
 }
 
 } // namespace browser
