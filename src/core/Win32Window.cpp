@@ -151,7 +151,9 @@ LRESULT CALLBACK Win32Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
-        if (self) self->onPaint(ps.rcPaint);
+        if (self) {
+            self->onPaint(hdc, ps.rcPaint);
+        }
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -178,10 +180,9 @@ void Win32Window::onSize(int w, int h) {
     }
 }
 
-void Win32Window::onPaint(const RECT& rcPaint) {
+void Win32Window::onPaint(HDC hdc, const RECT& rcPaint) {
     if (!ui_) return;
-    (void)rcPaint;
-    ui_->onFrame(0.0);
+    ui_->renderPage(hdc, rcPaint);
 }
 
 } // namespace core
