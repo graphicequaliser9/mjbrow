@@ -56,10 +56,7 @@ public:
     /**
      * @brief Navigation shortcuts for toolbar/menu.
      */
-/**
-      * @brief Navigation shortcuts for toolbar/menu.
-      */
-    void goBack()    { if (!history_.empty()) navigate(history_.back()); }
+void goBack()    { /* TODO: history */ navigate(url_); }
     void goForward() { /* TODO: forward history */ }
     void goReload()  { if (!url_.empty()) navigate(url_); }
 
