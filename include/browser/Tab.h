@@ -135,8 +135,7 @@ private:
     std::string rawHtml_;                  ///< Last-fetched raw source
     std::string bodyText_;                   ///< Extracted body text for rendering
     html::DOMNode* documentRaw_{nullptr};    ///< Raw pointer to parsed document
-    std::unique_ptr<html::DOMNode> document_; ///< Live DOM tree
-    std::unique_ptr<js::VM>     vm_;       ///< Per-tab JS engine
+    std::unique_ptr<js::VM> vm_;            ///< Per-tab JS engine
     WebView  webView_;                     ///< Viewport + scroll state
     bool     loading_{true};               ///< True until first paint completes
     double   paintUs_{0.0};                ///< Last paint duration (us)

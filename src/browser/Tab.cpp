@@ -66,9 +66,8 @@ void Tab::tick(double dtMs) {
 }
 
 std::string Tab::title() const {
-    if (!document_) return url_;
-    // Walk firstChild chain looking for <title>
-    for (html::DOMNode* child = document_->firstChild; child; child = child->nextSibling) {
+    if (!documentRaw_) return url_;
+    for (html::DOMNode* child = documentRaw_->firstChild; child; child = child->nextSibling) {
         if (child->nodeType == html::NodeType::Element && child->tagName == "title") {
             return child->textContent;
         }
@@ -77,7 +76,7 @@ std::string Tab::title() const {
 }
 
 void Tab::clear() {
-    document_.reset();
+    documentRaw_ = nullptr;
     vm_.reset();
     url_.clear();
     rawHtml_.clear();
@@ -94,21 +93,19 @@ void Tab::parseHTML(const std::string& html) {
 }
 
 void Tab::cascadeStyles() {
-    // Stub – real cascade in css/ module bead
-    util::Log(util::LogLevel::Debug, "Tab: cascadeStyles stub\n");
-    (void)document_;
+    // Stub
+    (void)documentRaw_;
 }
 
 void Tab::performLayout() {
-    // Stub – real layout pass in layout/ bead
-    util::Log(util::LogLevel::Debug, "Tab: performLayout stub\n");
-    (void)document_;
+    // Stub
+    (void)documentRaw_;
 }
 
 void Tab::paintFrame() {
     // Store parsed body text for rendering
-    if (document_ && document_->firstChild) {
-        bodyText_ = document_->firstChild->textContent;
+    if (documentRaw_ && documentRaw_->firstChild) {
+        bodyText_ = documentRaw_->firstChild->textContent;
     }
     paintUs_ = 0.0;
 }
