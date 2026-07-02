@@ -43,11 +43,20 @@ void Tab::navigate(const std::string& url) {
 
     if (rawHtml_.empty()) {
         util::Log(util::LogLevel::Warn, "Tab: empty response from " + url + "\n");
+        bodyText_ = "(failed to load content)";
         loading_ = false;
         return;
     }
 
     parseHTML(rawHtml_);
+    
+    // Extract body text NOW - don't wait for tick
+    if (documentRaw_ && documentRaw_->firstChild) {
+        bodyText_ = documentRaw_->firstChild->textContent;
+    } else {
+        bodyText_ = "(no body content)";
+    }
+
     cascadeStyles();
     performLayout();
     loading_ = false;
@@ -103,10 +112,12 @@ void Tab::performLayout() {
 }
 
 void Tab::paintFrame() {
-    // Store parsed body text for rendering
-    if (documentRaw_ && documentRaw_->firstChild) {
-        bodyText_ = documentRaw_->firstChild->textContent;
+    // Debug: ensure bodyText_ is set even if parsing failed
+    if (!documentRaw_ || !documentRaw_->firstChild) {
+        bodyText_ = "(no content loaded)";
+        return;
     }
+    bodyText_ = documentRaw_->firstChild->textContent;
     paintUs_ = 0.0;
 }
 
