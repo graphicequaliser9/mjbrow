@@ -17,6 +17,7 @@
 #include "util/String.h"
 #include "util/Memory.h"
 #include "util/Logging.h"
+#include "util/Arena.h"
 
 // --- core ---
 #ifdef _WIN32
