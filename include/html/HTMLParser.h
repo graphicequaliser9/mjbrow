@@ -37,6 +37,8 @@ struct Token {
 
 namespace html {
 
+class ArenaAllocator; // forward declare
+
 class HTMLParser {
 public:
     HTMLParser();
@@ -48,7 +50,7 @@ public:
     class DOMNode* parse(const std::string& html);
 
 private:
-    // Placeholder for internal state
+    class DOMNodePool* nodePool_;
 };
 
 } // namespace html

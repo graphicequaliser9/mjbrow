@@ -32,6 +32,7 @@ set(CROSS_PLATFORM_SOURCES
     src/util/String.cpp
     src/util/Memory.cpp
     src/util/Logging.cpp
+    src/util/Arena.cpp
     src/browser/Tab.cpp
     src/browser/Bookmarks.cpp
     src/browser/URLBar.cpp
