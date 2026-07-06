@@ -28,6 +28,7 @@ set(CROSS_PLATFORM_SOURCES
     src/html/HTMLParser.cpp
     src/html/DOMNode.cpp
     src/css/CSSParser.cpp
+    src/css/StringPool.cpp
     src/js/VM.cpp
     src/render/Painter.cpp
     src/layout/Box.cpp
