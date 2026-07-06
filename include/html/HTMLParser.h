@@ -37,7 +37,8 @@ struct Token {
 
 namespace html {
 
-class ArenaAllocator; // forward declare
+// Forward declare DOMNodePool (defined in DOMNode.h)
+class DOMNodePool;
 
 class HTMLParser {
 public:

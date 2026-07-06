@@ -12,12 +12,18 @@ namespace util {
 
 ArenaAllocator::ArenaAllocator(size_t initialCapacity)
     : head_(nullptr)
-    , totalAllocated_(0) {
+    , tail_(nullptr)
+    , totalAllocated_(0)
+    , totalCapacity_(0) {
     head_ = new Chunk();
     head_->capacity = initialCapacity;
     head_->offset = 0;
     head_->next = nullptr;
     head_->data = static_cast<uint8_t*>(malloc(initialCapacity));
+    if (head_->data) {
+        totalCapacity_ = initialCapacity;
+    }
+    tail_ = head_;
 }
 
 ArenaAllocator::~ArenaAllocator() {
@@ -34,19 +40,37 @@ void* ArenaAllocator::allocate(size_t size) {
     // Align to 8 bytes for proper alignment
     size_t alignedSize = (size + 7) & ~static_cast<size_t>(7);
 
-    if (!head_ || head_->offset + alignedSize > head_->capacity) {
-        Chunk* chunk = new Chunk();
-        chunk->capacity = CHUNK_SIZE;
-        chunk->offset = 0;
-        chunk->data = static_cast<uint8_t*>(malloc(CHUNK_SIZE));
-        chunk->next = head_;
-        head_ = chunk;
+    Chunk* current = tail_;
+    while (current) {
+        if (current->offset + alignedSize <= current->capacity) {
+            void* ptr = current->data + current->offset;
+            current->offset += alignedSize;
+            totalAllocated_ += alignedSize;
+            return ptr;
+        }
+        current = current->next;
+        if (current) {
+            tail_ = current;
+        }
     }
 
-    void* ptr = head_->data + head_->offset;
-    head_->offset += alignedSize;
+    // Need a new chunk
+    Chunk* chunk = new Chunk();
+    chunk->capacity = CHUNK_SIZE;
+    chunk->offset = alignedSize;
+    chunk->data = static_cast<uint8_t*>(malloc(CHUNK_SIZE));
+    chunk->next = nullptr;
+
+    if (!head_) {
+        head_ = chunk;
+    } else {
+        tail_->next = chunk;
+    }
+    tail_ = chunk;
+    totalCapacity_ += CHUNK_SIZE;
+
     totalAllocated_ += alignedSize;
-    return ptr;
+    return chunk->data;
 }
 
 void ArenaAllocator::reset() {
@@ -59,6 +83,7 @@ void ArenaAllocator::reset() {
     if (head_) {
         head_->offset = 0;
     }
+    tail_ = head_;
     totalAllocated_ = 0;
 }
 
@@ -71,6 +96,15 @@ bool ArenaAllocator::owns(void* ptr) const {
         current = current->next;
     }
     return false;
+}
+
+size_t ArenaAllocator::capacityRemaining() const {
+    if (!tail_) return 0;
+    return tail_->capacity - tail_->offset;
+}
+
+size_t ArenaAllocator::totalCapacity() const {
+    return totalCapacity_;
 }
 
 } // namespace util

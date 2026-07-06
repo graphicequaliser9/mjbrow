@@ -27,6 +27,8 @@ public:
     void reset();
 
     bool owns(void* ptr) const;
+    size_t capacityRemaining() const;
+    size_t totalCapacity() const;
 
 private:
     static constexpr size_t CHUNK_SIZE = 64 * 1024;
@@ -39,7 +41,9 @@ private:
     };
 
     Chunk* head_;
+    Chunk* tail_;
     size_t totalAllocated_;
+    size_t totalCapacity_;
 };
 
 } // namespace util
