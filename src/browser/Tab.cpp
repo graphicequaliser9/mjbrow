@@ -29,13 +29,25 @@ Tab::Tab(const std::string& initialUrl) {
 
 Tab::~Tab() = default;
 
+static std::string extractTextContent(html::DOMNode* node) {
+    std::string result;
+    if (!node) return result;
+    for (html::DOMNode* child = node->firstChild; child; child = child->nextSibling) {
+        if (child->nodeType == html::NodeType::Text) {
+            result += child->textContent;
+        } else if (child->nodeType == html::NodeType::Element) {
+            result += extractTextContent(child);
+        }
+    }
+    return result;
+}
+
 void Tab::navigate(const std::string& url) {
     url_     = url;
     loading_ = true;
 
     util::Log(util::LogLevel::Info, "Tab::navigate → " + url + "\n");
 
-    // Fetch raw HTML via the cross-platform net layer
     net::HttpClient client;
     auto response   = client.sendRequest(url, "GET");
     std::string body(response.body.begin(), response.body.end());
@@ -50,12 +62,14 @@ void Tab::navigate(const std::string& url) {
 
     parseHTML(rawHtml_);
     
-    // Extract body text NOW - don't wait for tick
-    if (documentRaw_ && documentRaw_->firstChild) {
-        bodyText_ = documentRaw_->firstChild->textContent;
-    } else {
-        bodyText_ = "(no body content)";
+    html::DOMNode* bodyNode = nullptr;
+    for (html::DOMNode* child = documentRaw_ ? documentRaw_->firstChild : nullptr; child; child = child->nextSibling) {
+        if (child->nodeType == html::NodeType::Element && child->tagName == "body") {
+            bodyNode = child;
+            break;
+        }
     }
+    bodyText_ = extractTextContent(bodyNode);
 
     cascadeStyles();
     performLayout();
@@ -78,7 +92,13 @@ std::string Tab::title() const {
     if (!documentRaw_) return url_;
     for (html::DOMNode* child = documentRaw_->firstChild; child; child = child->nextSibling) {
         if (child->nodeType == html::NodeType::Element && child->tagName == "title") {
-            return child->textContent;
+            std::string result;
+            for (html::DOMNode* textChild = child->firstChild; textChild; textChild = textChild->nextSibling) {
+                if (textChild->nodeType == html::NodeType::Text) {
+                    result += textChild->textContent;
+                }
+            }
+            return result;
         }
     }
     return url_;
@@ -112,12 +132,18 @@ void Tab::performLayout() {
 }
 
 void Tab::paintFrame() {
-    // Debug: ensure bodyText_ is set even if parsing failed
-    if (!documentRaw_ || !documentRaw_->firstChild) {
+    if (!documentRaw_) {
         bodyText_ = "(no content loaded)";
         return;
     }
-    bodyText_ = documentRaw_->firstChild->textContent;
+    html::DOMNode* bodyNode = nullptr;
+    for (html::DOMNode* child = documentRaw_->firstChild; child; child = child->nextSibling) {
+        if (child->nodeType == html::NodeType::Element && child->tagName == "body") {
+            bodyNode = child;
+            break;
+        }
+    }
+    bodyText_ = extractTextContent(bodyNode);
     paintUs_ = 0.0;
 }
 
