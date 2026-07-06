@@ -12,14 +12,8 @@
 
 namespace util {
 
-/// @brief Safely allocates memory.
-/// @param size The size to allocate.
-/// @return Pointer to the allocated memory.
-void* allocate(size_t size);
-
-/// @brief Safely frees memory.
-/// @param ptr Pointer to the memory to free.
-void free(void* ptr);
+inline void* allocate(size_t size) { return operator new(size); }
+inline void free(void* ptr) { operator delete(ptr); }
 
 } // namespace util
 
