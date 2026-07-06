@@ -26,9 +26,12 @@ enum class TokenType {
 };
 
 struct Token {
-    TokenType type;
+    TokenType type{TokenType::EOF_TOKEN};
     std::string data;        ///< tag name, character data, comment text, etc.
     std::vector<std::pair<std::string, std::string>> attributes; // attr key/value pairs
+    bool forceQuirks{false}; ///< DOCTYPE: forced-quirks flag
+    std::string publicId;    ///< DOCTYPE public identifier
+    std::string systemId;    ///< DOCTYPE system identifier
 };
 
 } // namespace html

@@ -28,6 +28,11 @@ enum class NodeType {
     Comment,
 };
 
+/// @brief Well-known XML namespace URIs used by the tree builder.
+inline const char* kNamespaceHTML  = "http://www.w3.org/1999/xhtml";
+inline const char* kNamespaceMathML = "http://www.w3.org/1998/Math/MathML";
+inline const char* kNamespaceSVG    = "http://www.w3.org/2000/svg";
+
 class DOMNode {
 public:
     NodeType nodeType{NodeType::Document};
@@ -64,12 +69,22 @@ public:
     /// @brief Removes a previously appended child.
     void removeChild(DOMNode* child);
 
-    ~DOMNode();
+    virtual ~DOMNode();
 };
 
 class Document : public DOMNode {
 public:
     Document();
+
+    /// @brief Forced-quirks mode as implied by the parsed DOCTYPE.
+    bool quirksMode{false};
+
+    /// @brief Name token from the DOCTYPE declaration (e.g. "html").
+    std::string doctypeName;
+
+    /// @brief Public / system identifiers from the DOCTYPE (empty if absent).
+    std::string doctypePublicId;
+    std::string doctypeSystemId;
 };
 
 } // namespace html

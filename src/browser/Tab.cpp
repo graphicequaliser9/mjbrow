@@ -27,7 +27,12 @@ Tab::Tab(const std::string& initialUrl) {
     if (!initialUrl.empty()) navigate(initialUrl);
 }
 
-Tab::~Tab() = default;
+Tab::~Tab() {
+    if (documentRaw_ && documentRaw_->ownerDocument == nullptr) {
+        delete static_cast<html::Document*>(documentRaw_);
+    }
+    documentRaw_ = nullptr;
+}
 
 static std::string extractTextContent(html::DOMNode* node) {
     std::string result;
@@ -105,6 +110,10 @@ std::string Tab::title() const {
 }
 
 void Tab::clear() {
+    if (documentRaw_ && documentRaw_->ownerDocument == nullptr) {
+        // Owning root document (parse() returns a heap Document with nullptr owner).
+        delete static_cast<html::Document*>(documentRaw_);
+    }
     documentRaw_ = nullptr;
     vm_.reset();
     url_.clear();
@@ -117,6 +126,9 @@ js::VM* Tab::vm() const { return vm_.get(); }
 // ── private helpers ──────────────────────────────────────────────────────
 
 void Tab::parseHTML(const std::string& html) {
+    if (documentRaw_ && documentRaw_->ownerDocument == nullptr) {
+        delete static_cast<html::Document*>(documentRaw_);
+    }
     static html::HTMLParser parser;
     documentRaw_ = parser.parse(html);
 }

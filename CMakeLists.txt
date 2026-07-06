@@ -65,3 +65,16 @@ endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+# Self-contained parser/DOM tests (no external framework).  These compile the
+# HTML parser + DOM sources directly so the test does not depend on the Win32
+# GUI executable building.
+add_executable(nitrogen_parser_test tests/parser_test.cpp)
+target_sources(nitrogen_parser_test PRIVATE
+    src/html/HTMLParser.cpp
+)
+target_include_directories(nitrogen_parser_test PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+enable_testing()
+add_test(NAME parser_test COMMAND nitrogen_parser_test)

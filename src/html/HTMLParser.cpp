@@ -29,6 +29,33 @@ static bool isVoidElement(const std::string& tag) {
     return false;
 }
 
+static const std::vector<std::string> mathElementNames = {
+    "math"
+};
+
+static const std::vector<std::string> svgElementNames = {
+    "svg"
+};
+
+static const std::vector<std::string> tableElements = {
+    "table", "tbody", "thead", "tfoot", "tr", "td", "th", "caption", "colgroup", "col"
+};
+
+static bool isMathMLElement(const std::string& tag) {
+    for (const auto& t : mathElementNames) if (tag == t) return true;
+    return false;
+}
+
+static bool isSVGElement(const std::string& tag) {
+    for (const auto& t : svgElementNames) if (tag == t) return true;
+    return false;
+}
+
+static bool isTableElement(const std::string& tag) {
+    for (const auto& t : tableElements) if (tag == t) return true;
+    return false;
+}
+
 static void skipWhitespace(const std::string& s, size_t& pos) {
     while (pos < s.size() && std::isspace(static_cast<unsigned char>(s[pos]))) { ++pos; }
 }
@@ -80,6 +107,20 @@ static void extractAttributes(const std::string& s, size_t& pos, std::vector<std
     }
 }
 
+static Token makeToken(TokenType type, std::string data = {},
+                        std::vector<std::pair<std::string, std::string>> attrs = {},
+                        bool forceQuirks = false, std::string publicId = {},
+                        std::string systemId = {}) {
+    Token t;
+    t.type = type;
+    t.data = std::move(data);
+    t.attributes = std::move(attrs);
+    t.forceQuirks = forceQuirks;
+    t.publicId = std::move(publicId);
+    t.systemId = std::move(systemId);
+    return t;
+}
+
 static std::vector<Token> tokenize(const std::string& html) {
     std::vector<Token> tokens;
     size_t pos = 0;
@@ -93,7 +134,7 @@ static std::vector<Token> tokenize(const std::string& html) {
                 ++pos;
                 skipWhitespace(html, pos);
                 std::string tagName = extractTagName(html, pos);
-                tokens.push_back({TokenType::EndTag, tagName, {}});
+                tokens.push_back(makeToken(TokenType::EndTag, tagName));
                 while (pos < html.size() && html[pos] != '>') ++pos;
                 if (pos < html.size()) ++pos;
             } else if (html[pos] == '!') {
@@ -104,38 +145,110 @@ static std::vector<Token> tokenize(const std::string& html) {
                     while (pos + 2 < html.size() && !(html[pos] == '-' && html[pos + 1] == '-' && html[pos + 2] == '>')) ++pos;
                     std::string comment = html.substr(start, pos - start);
                     if (pos + 2 < html.size()) pos += 3;
-                    tokens.push_back({TokenType::Comment, comment, {}});
+                    tokens.push_back(makeToken(TokenType::Comment, comment));
                 } else {
+                    // DOCTYPE: <!DOCTYPE html ...>
+                    Token doctype = makeToken(TokenType::DOCTYPE, "html");
+                    skipWhitespace(html, pos);
+                    // consume the "doctype" keyword
+                    while (pos < html.size() && std::isalpha(static_cast<unsigned char>(html[pos]))) ++pos;
+                    skipWhitespace(html, pos);
+
+                    auto readQuotedOrWord = [&](std::string& out) {
+                        if (pos < html.size() && (html[pos] == '"' || html[pos] == '\'')) {
+                            char q = html[pos++];
+                            size_t st = pos;
+                            while (pos < html.size() && html[pos] != q) ++pos;
+                            out = html.substr(st, pos - st);
+                            if (pos < html.size()) ++pos;
+                        } else {
+                            size_t st = pos;
+                            while (pos < html.size() && !std::isspace(static_cast<unsigned char>(html[pos])) && html[pos] != '>')
+                                ++pos;
+                            out = html.substr(st, pos - st);
+                        }
+                    };
+
+                    if (pos < html.size() && html[pos] != '>') {
+                        readQuotedOrWord(doctype.data);
+                        skipWhitespace(html, pos);
+                        if (pos + 5 < html.size() && html.compare(pos, 6, "public") == 0) {
+                            pos += 6;
+                            skipWhitespace(html, pos);
+                            readQuotedOrWord(doctype.publicId);
+                            skipWhitespace(html, pos);
+                            if (pos < html.size() && (html[pos] == '"' || html[pos] == '\'')) {
+                                readQuotedOrWord(doctype.systemId);
+                            }
+                        } else if (pos + 5 < html.size() && html.compare(pos, 6, "system") == 0) {
+                            pos += 6;
+                            skipWhitespace(html, pos);
+                            readQuotedOrWord(doctype.systemId);
+                        }
+                    }
+
                     while (pos < html.size() && html[pos] != '>') ++pos;
                     if (pos < html.size()) ++pos;
-                    tokens.push_back({TokenType::DOCTYPE, "", {}});
+                    tokens.push_back(doctype);
                 }
             } else {
                 std::string tagName = extractTagName(html, pos);
                 std::vector<std::pair<std::string, std::string>> attrs;
                 extractAttributes(html, pos, attrs);
 
-                bool selfClosing = false;
                 if (pos < html.size() && html[pos] == '/') {
-                    selfClosing = true;
                     ++pos;
                 }
                 while (pos < html.size() && html[pos] != '>') ++pos;
                 if (pos < html.size()) ++pos;
 
-                Token tok{TokenType::StartTag, tagName, attrs};
+                Token tok = makeToken(TokenType::StartTag, tagName, attrs);
                 tokens.push_back(tok);
             }
         } else {
             size_t start = pos;
             while (pos < html.size() && html[pos] != '<') ++pos;
             if (pos > start) {
-                tokens.push_back({TokenType::Character, html.substr(start, pos - start), {}});
+                tokens.push_back(makeToken(TokenType::Character, html.substr(start, pos - start)));
             }
         }
     }
-    tokens.push_back({TokenType::EOF_TOKEN, "", {}});
+    tokens.push_back(makeToken(TokenType::EOF_TOKEN));
     return tokens;
+}
+
+static void appendChildRaw(DOMNode* parent, DOMNode* child) {
+    child->parent = parent;
+    if (parent->lastChild) {
+        parent->lastChild->nextSibling = child;
+        child->prevSibling = parent->lastChild;
+    } else {
+        parent->firstChild = child;
+    }
+    parent->lastChild = child;
+}
+
+static DOMNode* deepClone(DOMNode* node, Document* owner) {
+    if (!node) return nullptr;
+    auto* clone = new DOMNode();
+    clone->nodeType = node->nodeType;
+    clone->tagName = node->tagName;
+    clone->textContent = node->textContent;
+    clone->attributes = node->attributes;
+    clone->namespaceURI = node->namespaceURI;
+    clone->ownerDocument = owner;
+    for (DOMNode* child = node->firstChild; child; child = child->nextSibling) {
+        DOMNode* c = deepClone(child, owner);
+        c->parent = clone;
+        if (clone->lastChild) {
+            clone->lastChild->nextSibling = c;
+            c->prevSibling = clone->lastChild;
+        } else {
+            clone->firstChild = c;
+        }
+        clone->lastChild = c;
+    }
+    return clone;
 }
 
 static DOMNode* parseHTML(const std::string& html, Document& doc) {
@@ -150,51 +263,85 @@ static DOMNode* parseHTML(const std::string& html, Document& doc) {
         }
         doc.firstChild = doc.lastChild = nullptr;
     }
+    doc.doctypeName.clear();
+    doc.doctypePublicId.clear();
+    doc.doctypeSystemId.clear();
+    doc.quirksMode = false;
 
     std::vector<DOMNode*> openElements;
+
+    // Current namespace stack, aligned with openElements (and document root).
+    std::vector<const char*> nsStack;
+
+    auto open = [&](const std::string& tag, const std::vector<std::pair<std::string, std::string>>& attrs,
+                    const char* ns, bool isVoid) {
+        auto* element = new DOMNode();
+        element->nodeType = NodeType::Element;
+        element->tagName = tag;
+        element->namespaceURI = ns;
+        element->ownerDocument = &doc;
+        for (const auto& attr : attrs) {
+            element->attributes[attr.first] = attr.second;
+        }
+
+        DOMNode* parent = openElements.empty() ? static_cast<DOMNode*>(&doc) : openElements.back();
+
+        // Simplified foster-parenting: content that belongs inside a table
+        // cell/row but appears directly under <table>/<tbody>/<thead>/<tfoot>
+        // is adopted up to the most recent <tr>/<td>/<th> (<tr> preferred).
+        if (parent != &doc && isTableElement(parent->tagName) && parent->tagName != "table" &&
+            !isTableElement(tag) && tag != "caption") {
+            DOMNode* foster = nullptr;
+            for (auto it = openElements.rbegin(); it != openElements.rend(); ++it) {
+                const std::string& t = (*it)->tagName;
+                if (t == "tr") { foster = *it; break; }
+                if (t == "td" || t == "th") { foster = *it; break; }
+            }
+            if (foster) parent = foster;
+        }
+
+        appendChildRaw(parent, element);
+
+        if (!isVoid) {
+            openElements.push_back(element);
+            nsStack.push_back(ns);
+        }
+        return element;
+    };
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         const Token& tok = tokens[i];
 
-        if (tok.type == TokenType::StartTag) {
-            auto* element = new DOMNode();
-            element->nodeType = NodeType::Element;
-            element->tagName = tok.data;
-            element->ownerDocument = &doc;
-            for (const auto& attr : tok.attributes) {
-                element->attributes[attr.first] = attr.second;
-            }
+        if (tok.type == TokenType::DOCTYPE) {
+            doc.doctypeName = tok.data;
+            doc.doctypePublicId = tok.publicId;
+            doc.doctypeSystemId = tok.systemId;
+            doc.quirksMode = tok.forceQuirks;
 
-            if (!openElements.empty()) {
-                DOMNode* parent = openElements.back();
-                element->parent = parent;
-                if (parent->lastChild) {
-                    parent->lastChild->nextSibling = element;
-                    element->prevSibling = parent->lastChild;
-                } else {
-                    parent->firstChild = element;
-                }
-                parent->lastChild = element;
-            } else {
-                element->parent = &doc;
-                if (doc.lastChild) {
-                    doc.lastChild->nextSibling = element;
-                    element->prevSibling = doc.lastChild;
-                } else {
-                    doc.firstChild = element;
-                }
-                doc.lastChild = element;
-            }
+        } else if (tok.type == TokenType::Comment) {
+            auto* comment = new DOMNode();
+            comment->nodeType = NodeType::Comment;
+            comment->textContent = tok.data;
+            comment->ownerDocument = &doc;
+            appendChildRaw(openElements.empty() ? static_cast<DOMNode*>(&doc) : openElements.back(), comment);
 
-            if (!isVoidElement(tok.data)) {
-                openElements.push_back(element);
-            }
+        } else if (tok.type == TokenType::StartTag) {
+            const char* ns = kNamespaceHTML;
+            if (isMathMLElement(tok.data)) ns = kNamespaceMathML;
+            else if (isSVGElement(tok.data)) ns = kNamespaceSVG;
+
+            open(tok.data, tok.attributes, ns, isVoidElement(tok.data));
 
         } else if (tok.type == TokenType::EndTag) {
             std::string tagName = tok.data;
             for (auto it = openElements.rbegin(); it != openElements.rend(); ++it) {
                 if ((*it)->tagName == tagName) {
-                    openElements.erase(std::next(it).base(), openElements.end());
+                    // Pop everything from this element (inclusive).
+                    size_t count = static_cast<size_t>(std::distance(openElements.rbegin(), it)) + 1;
+                    for (size_t k = 0; k < count; ++k) {
+                        nsStack.pop_back();
+                        openElements.pop_back();
+                    }
                     break;
                 }
             }
@@ -207,25 +354,14 @@ static DOMNode* parseHTML(const std::string& html, Document& doc) {
             textNode->textContent = tok.data;
             textNode->ownerDocument = &doc;
 
-            if (!openElements.empty()) {
-                DOMNode* parent = openElements.back();
-                textNode->parent = parent;
-                if (parent->lastChild) {
-                    parent->lastChild->nextSibling = textNode;
-                    textNode->prevSibling = parent->lastChild;
-                } else {
-                    parent->firstChild = textNode;
-                }
-                parent->lastChild = textNode;
+            DOMNode* parent = openElements.empty() ? static_cast<DOMNode*>(&doc) : openElements.back();
+
+            // Coalesce adjacent text nodes (simplified adoption-agency text fix).
+            if (parent->lastChild && parent->lastChild->nodeType == NodeType::Text) {
+                parent->lastChild->textContent += tok.data;
+                delete textNode;
             } else {
-                textNode->parent = &doc;
-                if (doc.lastChild) {
-                    doc.lastChild->nextSibling = textNode;
-                    textNode->prevSibling = doc.lastChild;
-                } else {
-                    doc.firstChild = textNode;
-                }
-                doc.lastChild = textNode;
+                appendChildRaw(parent, textNode);
             }
         }
     }
@@ -234,12 +370,31 @@ static DOMNode* parseHTML(const std::string& html, Document& doc) {
 }
 
 DOMNode* HTMLParser::parse(const std::string& html) {
-    static Document doc;
-    doc.firstChild = nullptr;
-    doc.lastChild = nullptr;
-    doc.nodeType = NodeType::Document;
-    
-    return parseHTML(html, doc);
+    auto* doc = new Document();
+
+    Document scratch;
+    parseHTML(html, scratch);
+
+    // The scratch document owns its children; deep-copy them into the
+    // heap-allocated document so the caller owns a self-contained tree.
+    for (DOMNode* child = scratch.firstChild; child; child = child->nextSibling) {
+        DOMNode* c = deepClone(child, doc);
+        c->parent = doc;
+        if (doc->lastChild) {
+            doc->lastChild->nextSibling = c;
+            c->prevSibling = doc->lastChild;
+        } else {
+            doc->firstChild = c;
+        }
+        doc->lastChild = c;
+    }
+
+    doc->doctypeName = scratch.doctypeName;
+    doc->doctypePublicId = scratch.doctypePublicId;
+    doc->doctypeSystemId = scratch.doctypeSystemId;
+    doc->quirksMode = scratch.quirksMode;
+
+    return doc;
 }
 
 void DOMNode::setInnerHTML(const std::string& html) {
@@ -253,25 +408,17 @@ void DOMNode::setInnerHTML(const std::string& html) {
     Document tempDoc;
     parseHTML(html, tempDoc);
 
-    DOMNode* child = tempDoc.firstChild;
-    while (child) {
-        DOMNode* clone = new DOMNode();
-        clone->nodeType = child->nodeType;
-        clone->tagName = child->tagName;
-        clone->textContent = child->textContent;
-        clone->attributes = child->attributes;
-        clone->parent = this;
-        clone->ownerDocument = ownerDocument;
-
+    Document* owner = ownerDocument ? ownerDocument : dynamic_cast<Document*>(this);
+    for (DOMNode* child = tempDoc.firstChild; child; child = child->nextSibling) {
+        DOMNode* c = deepClone(child, owner);
+        c->parent = this;
         if (lastChild) {
-            lastChild->nextSibling = clone;
-            clone->prevSibling = lastChild;
+            lastChild->nextSibling = c;
+            c->prevSibling = lastChild;
         } else {
-            firstChild = clone;
+            firstChild = c;
         }
-        lastChild = clone;
-
-        child = child->nextSibling;
+        lastChild = c;
     }
 }
 
