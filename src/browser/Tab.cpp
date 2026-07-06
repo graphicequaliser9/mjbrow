@@ -13,6 +13,7 @@
 #include "net/HttpClient.h"
 #include "js/VM.h"
 #include "css/CSSParser.h"
+#include "css/Cascade.h"
 #include "util/Logging.h"
 #include "util/String.h"
 
@@ -102,8 +103,26 @@ void Tab::parseHTML(const std::string& html) {
 }
 
 void Tab::cascadeStyles() {
-    // Stub
-    (void)documentRaw_;
+    if (!documentRaw_) return;
+
+    std::string combinedCss;
+
+    std::function<void(html::DOMNode*)> extractStyles = [&](html::DOMNode* node) {
+        if (!node) return;
+        if (node->nodeType == html::NodeType::Element && node->tagName == "style") {
+            combinedCss += node->textContent;
+            combinedCss += "\n";
+        }
+        for (html::DOMNode* child = node->firstChild; child; child = child->nextSibling) {
+            extractStyles(child);
+        }
+    };
+
+    extractStyles(documentRaw_);
+
+    auto mediaSheets = css::MediaParser::expandMediaRules(combinedCss);
+    css::Cascade cascade(std::move(mediaSheets), webView_.width);
+    cascade.resolve(documentRaw_);
 }
 
 void Tab::performLayout() {
