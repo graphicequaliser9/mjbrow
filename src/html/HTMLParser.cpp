@@ -6,7 +6,6 @@
 
 #include "html/HTMLParser.h"
 #include "html/DOMNode.h"
-#include "util/Arena.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -189,38 +188,7 @@ private:
         return t;
     }
 };
-
-class DOMNodePool {
-public:
-    DOMNodePool() : arena_(64 * 1024) {}
-
-    DOMNode* createNode(NodeType type) {
-        void* ptr = arena_.allocate(sizeof(DOMNode));
-        DOMNode* node = new (ptr) DOMNode();
-        node->nodeType = type;
-        node->parent = nullptr;
-        node->firstChild = nullptr;
-        node->lastChild = nullptr;
-        node->nextSibling = nullptr;
-        node->prevSibling = nullptr;
-        node->style = nullptr;
-        node->ownerDocument = nullptr;
-        return node;
-    }
-
-    Document* createDocument() {
-        void* ptr = arena_.allocate(sizeof(Document));
-        Document* doc = new (ptr) Document();
-        return doc;
-    }
-
-    void reset() {
-        arena_.reset();
-    }
-
-private:
-    util::ArenaAllocator arena_;
-};
+// DOMNodePool is now defined in include/html/DOMNode.h and implemented in src/html/DOMNode.cpp
 
 HTMLParser::HTMLParser() : nodePool_(new DOMNodePool()) {}
 
@@ -289,89 +257,6 @@ DOMNode* HTMLParser::parse(const std::string& html) {
     }
 
     return doc;
-}
-
-void DOMNode::setInnerHTML(const std::string& html) {
-    HTMLParser parser;
-    Document* newDoc = static_cast<Document*>(parser.parse(html));
-
-    // Clear existing children
-    while (firstChild) {
-        DOMNode* child = firstChild;
-        removeChild(child);
-        // In real implementation, we'd need to properly clean up
-    }
-
-    // Move children from parsed document
-    DOMNode* child = newDoc->firstChild;
-    while (child) {
-        DOMNode* next = child->nextSibling;
-        if (child->parent) {
-            child->parent = nullptr;
-        }
-        appendChild(child);
-        child = next;
-    }
-}
-
-DOMNode* DOMNode::appendChild(DOMNode* child) {
-    if (!child || child->parent == this) {
-        return child;
-    }
-
-    // Detach from previous parent
-    if (child->parent) {
-        child->parent->removeChild(child);
-    }
-
-    child->parent = this;
-    child->prevSibling = lastChild;
-    if (lastChild) {
-        lastChild->nextSibling = child;
-    }
-    lastChild = child;
-    if (!firstChild) {
-        firstChild = child;
-    }
-
-    // Set owner document
-    DOMNode* p = this;
-    while (p && p->nodeType != NodeType::Document) {
-        p = p->parent;
-    }
-    if (p) {
-        child->ownerDocument = static_cast<Document*>(p);
-    }
-
-    return child;
-}
-
-void DOMNode::removeChild(DOMNode* child) {
-    if (!child || child->parent != this) {
-        return;
-    }
-
-    if (child->prevSibling) {
-        child->prevSibling->nextSibling = child->nextSibling;
-    } else {
-        firstChild = child->nextSibling;
-    }
-
-    if (child->nextSibling) {
-        child->nextSibling->prevSibling = child->prevSibling;
-    } else {
-        lastChild = child->prevSibling;
-    }
-
-    child->parent = nullptr;
-    child->prevSibling = nullptr;
-    child->nextSibling = nullptr;
-}
-
-DOMNode::~DOMNode() = default;
-
-Document::Document() {
-    nodeType = NodeType::Document;
 }
 
 } // namespace html

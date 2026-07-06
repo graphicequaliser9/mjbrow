@@ -24,7 +24,9 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 set(CROSS_PLATFORM_SOURCES
     src/main.cpp
     src/net/HttpClient.cpp
+    src/html/DOMNode.cpp
     src/html/HTMLParser.cpp
+    src/html/DOMNode.cpp
     src/css/CSSParser.cpp
     src/js/VM.cpp
     src/render/Painter.cpp
