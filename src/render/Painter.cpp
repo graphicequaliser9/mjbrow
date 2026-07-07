@@ -306,6 +306,7 @@ float Win32Painter::boxHeightOf(html::DOMNode* node, float contentWidth) {
     float bt = s ? s->borderTop    : 0.0f;
     float bb = s ? s->borderBottom : 0.0f;
     float pl = s ? s->paddingLeft   : 0.0f;
+    float pt = s ? s->paddingTop    : 0.0f;
     float pr = s ? s->paddingRight  : 0.0f;
     float pb = s ? s->paddingBottom : 0.0f;
 
