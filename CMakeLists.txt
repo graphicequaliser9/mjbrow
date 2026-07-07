@@ -61,6 +61,20 @@ endif()
 # ── Executable ────────────────────────────────────────────────────────────────
 add_executable(${PROJECT_NAME} ${NITROGEN_SOURCES})
 
+# ── Table layout benchmark (Bead 5) ────────────────────────────────────────────
+# Cross-platform, no Win32 dependency: exercises the virtual-scroll table engine
+# and asserts the 3500x250 table uses < 5 MB of layout memory.
+set(TABLE_BENCH_SOURCES
+    bench/TableLayoutBenchmark.cpp
+    src/layout/Box.cpp
+    src/html/DOMNode.cpp
+    src/html/HTMLParser.cpp
+    src/util/Arena.cpp
+    src/util/String.cpp
+    src/util/Logging.cpp
+)
+add_executable(nitrogen_table_bench ${TABLE_BENCH_SOURCES})
+
 # Windows subsystem (GUI app).  Omit this flag on Linux/macOS so that stdout works.
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
