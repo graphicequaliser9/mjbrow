@@ -6,6 +6,7 @@
 
 #include "html/DOMNode.h"
 #include "html/HTMLParser.h"
+#include "css/ComputedStyle.h"
 #include "util/String.h"
 #include <cstdlib>
 #include <cstring>
@@ -35,7 +36,7 @@ DOMNode* DOMNodePool::createNode(NodeType type) {
         node->lastChild = nullptr;
         node->nextSibling = nullptr;
         node->prevSibling = nullptr;
-        node->style = nullptr;
+        node->style.reset();
         node->ownerDocument = nullptr;
         node->childIndex = 0;
         node->childCount = 0;
@@ -58,7 +59,7 @@ DOMNode* DOMNodePool::createNode(NodeType type) {
     node->lastChild = nullptr;
     node->nextSibling = nullptr;
     node->prevSibling = nullptr;
-    node->style = nullptr;
+    node->style.reset();
     node->ownerDocument = nullptr;
     node->childIndex = 0;
     node->childCount = 0;
@@ -84,7 +85,7 @@ void DOMNodePool::releaseNode(DOMNode* node) {
     node->lastChild = nullptr;
     node->nextSibling = nullptr;
     node->prevSibling = nullptr;
-    node->style = nullptr;
+    node->style.reset();
     node->ownerDocument = nullptr;
 }
 
@@ -104,29 +105,21 @@ void DOMNodePool::reset() {
 
 // DOMNode implementation
 void DOMNode::setInnerHTML(const std::string& html) {
-    // Note: This creates a temporary parser with its own pool for parsing.
-    // In production, we'd want to pass the pool or use a different approach
-    // to avoid cross-pool memory issues.
+    while (firstChild) {
+        DOMNode* next = firstChild->nextSibling;
+        firstChild->~DOMNode();
+        firstChild = next;
+    }
+    lastChild = nullptr;
+
     HTMLParser parser;
     Document* newDoc = static_cast<Document*>(parser.parse(html));
 
-    // Clear existing children
-    while (firstChild) {
-        DOMNode* child = firstChild;
-        removeChild(child);
-    }
-
-    // Move children from parsed document
     DOMNode* child = newDoc->firstChild;
     while (child) {
-        DOMNode* next = child->nextSibling;
-        // Detach from source document
-        if (child->parent) {
-            child->parent->removeChild(child);
-        }
-        // Append to this node (reuses the node, doesn't copy)
-        appendChild(child);
-        child = next;
+        DOMNode* clone = child->cloneNode();
+        appendChild(clone);
+        child = child->nextSibling;
     }
 }
 
@@ -205,6 +198,7 @@ void DOMNode::removeChild(DOMNode* child) {
     child->nextSibling = nullptr;
     child->childIndex = 0;
     childCount--;
+    child->~DOMNode();
 }
 
 DOMNode* DOMNode::insertBefore(DOMNode* child, DOMNode* referenceChild) {
@@ -286,7 +280,49 @@ DOMNode* DOMNode::getChildByIndex(uint32_t index) {
     return nullptr;
 }
 
-DOMNode::~DOMNode() = default;
+DOMNode::~DOMNode() {
+    while (firstChild) {
+        DOMNode* next = firstChild->nextSibling;
+        firstChild->~DOMNode();
+        firstChild = next;
+    }
+    firstChild = lastChild = nullptr;
+}
+
+DOMNode::DOMNode(const DOMNode& other)
+    : nodeType(other.nodeType)
+    , parent(nullptr)
+    , firstChild(nullptr)
+    , lastChild(nullptr)
+    , nextSibling(nullptr)
+    , prevSibling(nullptr)
+    , style(other.style ? std::make_unique<css::ComputedStyle>(*other.style) : nullptr)
+    , tagName(other.tagName)
+    , attributes(other.attributes)
+    , textContent(other.textContent)
+    , ownerDocument(other.ownerDocument)
+    , namespaceURI(other.namespaceURI)
+    , childIndex(0)
+    , childCount(0)
+{}
+
+DOMNode* DOMNode::cloneNode() const {
+    DOMNode* clone = new DOMNode(*this);
+    clone->parent = nullptr;
+    clone->nextSibling = nullptr;
+    clone->prevSibling = nullptr;
+    clone->firstChild = nullptr;
+    clone->lastChild = nullptr;
+    clone->childIndex = 0;
+    clone->childCount = 0;
+
+    for (DOMNode* sub = firstChild; sub; sub = sub->nextSibling) {
+        DOMNode* subClone = sub->cloneNode();
+        clone->appendChild(subClone);
+    }
+
+    return clone;
+}
 
 Document::Document() {
     nodeType = NodeType::Document;

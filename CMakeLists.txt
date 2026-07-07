@@ -24,7 +24,6 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 set(CROSS_PLATFORM_SOURCES
     src/main.cpp
     src/net/HttpClient.cpp
-    src/html/DOMNode.cpp
     src/html/HTMLParser.cpp
     src/html/DOMNode.cpp
     src/css/CSSParser.cpp
@@ -94,6 +93,67 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} gdiplus)
     target_link_libraries(nitrogen_painter_test gdiplus)
 endif()
+
+# ── Tests ──────────────────────────────────────────────────────────────────────
+enable_testing()
+
+add_test(NAME nitrogen_table_bench COMMAND nitrogen_table_bench)
+add_test(NAME nitrogen_painter_test COMMAND nitrogen_painter_test)
+
+# ── Unit tests for highest-risk modules ────────────────────────────────────────
+set(ARENA_TEST_SOURCES
+    test/ArenaTest.cpp
+    src/util/Arena.cpp
+)
+add_executable(nitrogen_arena_test ${ARENA_TEST_SOURCES})
+
+set(CSSPARSER_TEST_SOURCES
+    test/CSSParserTest.cpp
+    src/css/CSSParser.cpp
+    src/css/StringPool.cpp
+    src/util/String.cpp
+    src/util/Logging.cpp
+)
+add_executable(nitrogen_cssparser_test ${CSSPARSER_TEST_SOURCES})
+
+set(CASCADE_TEST_SOURCES
+    test/CascadeTest.cpp
+    src/css/CSSParser.cpp
+    src/css/StringPool.cpp
+    src/css/Cascade.cpp
+    src/html/DOMNode.cpp
+    src/html/HTMLParser.cpp
+    src/util/Arena.cpp
+    src/util/String.cpp
+    src/util/Logging.cpp
+)
+add_executable(nitrogen_cascade_test ${CASCADE_TEST_SOURCES})
+
+set(HTMLPARSER_TEST_SOURCES
+    test/HTMLParserTest.cpp
+    src/html/DOMNode.cpp
+    src/html/HTMLParser.cpp
+    src/util/Arena.cpp
+    src/util/String.cpp
+    src/util/Logging.cpp
+)
+add_executable(nitrogen_htmlparser_test ${HTMLPARSER_TEST_SOURCES})
+
+set(DOMNODEPOOL_TEST_SOURCES
+    test/DOMNodePoolTest.cpp
+    src/html/DOMNode.cpp
+    src/html/HTMLParser.cpp
+    src/util/Arena.cpp
+    src/util/String.cpp
+    src/util/Logging.cpp
+)
+add_executable(nitrogen_domnode_test ${DOMNODEPOOL_TEST_SOURCES})
+
+add_test(NAME nitrogen_arena_test COMMAND nitrogen_arena_test)
+add_test(NAME nitrogen_cssparser_test COMMAND nitrogen_cssparser_test)
+add_test(NAME nitrogen_cascade_test COMMAND nitrogen_cascade_test)
+add_test(NAME nitrogen_htmlparser_test COMMAND nitrogen_htmlparser_test)
+add_test(NAME nitrogen_domnode_test COMMAND nitrogen_domnode_test)
 
 # ── Install ───────────────────────────────────────────────────────────────────
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)

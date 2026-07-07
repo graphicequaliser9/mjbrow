@@ -74,14 +74,10 @@ void* ArenaAllocator::allocate(size_t size) {
 }
 
 void ArenaAllocator::reset() {
-    // Free all chunks except the first one
     Chunk* current = head_;
-    while (current && current->next) {
+    while (current) {
         current->offset = 0;
         current = current->next;
-    }
-    if (head_) {
-        head_->offset = 0;
     }
     tail_ = head_;
     totalAllocated_ = 0;

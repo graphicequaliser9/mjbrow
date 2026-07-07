@@ -77,7 +77,6 @@ public:
 private:
     std::vector<ResolvedMediaSheet> mediaSheets_;
     int viewportWidth_;
-    std::vector<ComputedStyle*> allocatedStyles_;
 
     void applyCascadeToElement(html::DOMNode* element);
     void applyInlineStyles(html::DOMNode* element);

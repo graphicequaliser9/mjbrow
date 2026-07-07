@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstring>
 #include <cstdlib>
+#include <vector>
 
 namespace html {
 
@@ -202,9 +203,8 @@ DOMNode* HTMLParser::parse(const std::string& html) {
     auto tokens = Tokenizer(html).tokenize();
 
     Document* doc = nodePool_->createDocument();
-    DOMNode* stack_[256];
-    int stackTop = 0;
-    stack_[stackTop++] = doc;
+    std::vector<DOMNode*> stack;
+    stack.push_back(doc);
 
     for (const Token& token : tokens) {
         if (token.type == TokenType::EOF_TOKEN) {
@@ -218,7 +218,7 @@ DOMNode* HTMLParser::parse(const std::string& html) {
         if (token.type == TokenType::Comment) {
             DOMNode* comment = nodePool_->createNode(NodeType::Comment);
             comment->textContent = token.data;
-            stack_[stackTop - 1]->appendChild(comment);
+            stack.back()->appendChild(comment);
             continue;
         }
 
@@ -226,7 +226,7 @@ DOMNode* HTMLParser::parse(const std::string& html) {
             if (!token.data.empty()) {
                 DOMNode* text = nodePool_->createNode(NodeType::Text);
                 text->textContent = token.data;
-                stack_[stackTop - 1]->appendChild(text);
+                stack.back()->appendChild(text);
             }
             continue;
         }
@@ -238,19 +238,17 @@ DOMNode* HTMLParser::parse(const std::string& html) {
                 element->attributes[attr.first] = attr.second;
             }
 
-            stack_[stackTop - 1]->appendChild(element);
+            stack.back()->appendChild(element);
 
-            // Handle void elements - they have no children and don't stay on stack
             if (!isVoidElement(token.data)) {
-                stack_[stackTop++] = element;
+                stack.push_back(element);
             }
             continue;
         }
 
         if (token.type == TokenType::EndTag) {
-            if (stackTop > 1) {
-                // Pop current element, move to parent
-                stackTop--;
+            if (stack.size() > 1) {
+                stack.pop_back();
             }
             continue;
         }

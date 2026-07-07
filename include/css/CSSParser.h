@@ -149,7 +149,7 @@ private:
 
     // ── Declaration parsing ────────────────────────────────────────────────
     bool parseDeclarations(std::vector<std::pair<const char*, const char*>>& out);
-    bool parseDeclaration(std::pair<const char*, const char*>& out);
+    bool parseDeclaration(std::vector<std::pair<const char*, const char*>>& out);
     bool parseValue(std::string& out);
     bool parseFunction(std::string& out);
     void parseUntilSemicolon(std::string& out);

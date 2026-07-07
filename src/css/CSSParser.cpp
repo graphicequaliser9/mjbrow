@@ -17,28 +17,6 @@
 
 namespace css {
 
-// ── StringPool ──────────────────────────────────────────────────────────────
-
-const char* StringPool::intern(const std::string& str) {
-    auto it = index_.find(str);
-    if (it != index_.end()) return strings_[it->second].c_str();
-    size_t idx = strings_.size();
-    strings_.push_back(str);
-    index_[strings_.back()] = idx;
-    return strings_.back().c_str();
-}
-
-const char* StringPool::intern(const char* data, size_t len) {
-    std::string tmp(data, len);
-    return intern(tmp);
-}
-
-size_t StringPool::bytesUsed() const {
-    size_t total = 0;
-    for (const auto& s : strings_) total += s.size() + sizeof(std::string);
-    return total;
-}
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 static std::vector<std::string> split(const std::string& s) {
@@ -76,10 +54,19 @@ static bool isLengthOrAuto(const std::string& token) {
     if (token == "auto") return true;
     if (token == "0") return true;
     if (token.size() > 0 && token.back() == '%') return true;
+
+    static const std::unordered_set<std::string> kValidUnits = {
+        "px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "cm", "mm", "in"
+    };
+
     if (token.size() > 1) {
-        char c = token.back();
-        if (c == 'x' || c == 'y' || c == 'z' || c == 'p' || c == 'e' || c == 'm' || c == 'x' || token == "px" || token == "em" || token == "rem" || token == "vh" || token == "vw" || token == "vmin" || token == "vmax" || token == "pt" || token == "cm" || token == "mm" || token == "in") return true;
+        for (const auto& unit : kValidUnits) {
+            if (token.size() > unit.size() && token.compare(token.size() - unit.size(), unit.size(), unit) == 0) {
+                return true;
+            }
+        }
     }
+
     char* end = nullptr;
     std::strtof(token.c_str(), &end);
     return end != nullptr && *end == '\0';
@@ -245,7 +232,20 @@ void CSSParser::tokenize(const std::string& css) {
             case ';': tokens_.push_back(Token{TokenType::Semicolon, ";", startLine, startCol}); pos_++; col_++; continue;
             case ',': tokens_.push_back(Token{TokenType::Comma, ",", startLine, startCol}); pos_++; col_++; continue;
             case '.': tokens_.push_back(Token{TokenType::Dot, ".", startLine, startCol}); pos_++; col_++; continue;
-            case '#': tokens_.push_back(Token{TokenType::Hash, "#", startLine, startCol}); pos_++; col_++; continue;
+            case '#': {
+                pos_++; col_++;
+                if (pos_ < css_.size() && (std::isalpha(static_cast<unsigned char>(css_[pos_])) || css_[pos_] == '_' || css_[pos_] == '-')) {
+                    size_t start = pos_;
+                    while (pos_ < css_.size() && (std::isalnum(static_cast<unsigned char>(css_[pos_])) || css_[pos_] == '_' || css_[pos_] == '-')) {
+                        col_++; pos_++;
+                    }
+                    std::string ident(css_, start, pos_ - start);
+                    tokens_.push_back(Token{TokenType::HashIdent, pool_.intern(ident), startLine, startCol});
+                } else {
+                    tokens_.push_back(Token{TokenType::Hash, "#", startLine, startCol});
+                }
+                continue;
+            }
             case '@': tokens_.push_back(Token{TokenType::Hash, "@", startLine, startCol}); pos_++; col_++; continue;
             case '=': tokens_.push_back(Token{TokenType::Equals, "=", startLine, startCol}); pos_++; col_++; continue;
             case '*': tokens_.push_back(Token{TokenType::Star, "*", startLine, startCol}); pos_++; col_++; continue;
@@ -456,12 +456,8 @@ bool CSSParser::parseAtRule(KeyFrameRule& keyframe) {
         if (!match(TokenType::LBrace)) return false;
 
         keyframe.name = pool_.intern(kfName);
-        bool firstBlock = true;
 
         while (!isEOF() && !match(TokenType::RBrace)) {
-            if (!firstBlock) break;
-            firstBlock = false;
-
             float percent = 0.0f;
             Token selTok = consumeToken();
 
@@ -539,8 +535,15 @@ bool CSSParser::parseSimpleSelector(SimpleSelector& out) {
         out.tagName = pool_.intern(t.text);
     } else if (t.type == TokenType::Star) {
         out.tagName = pool_.intern("*");
-    } else if (t.type == TokenType::Hash) {
+    } else if (t.type == TokenType::HashIdent) {
         out.id = pool_.intern(t.text);
+    } else if (t.type == TokenType::Hash) {
+        Token idTok = consumeToken();
+        if (idTok.type == TokenType::Ident) {
+            out.id = pool_.intern(idTok.text);
+        } else {
+            pushBack(idTok);
+        }
     } else if (t.type == TokenType::Dot) {
         out.tagName = pool_.intern("*");
         pushBack(t);
@@ -565,6 +568,8 @@ bool CSSParser::parseSimpleSelector(SimpleSelector& out) {
                 pushBack(classTok);
                 break;
             }
+        } else if (m.type == TokenType::HashIdent) {
+            out.id = pool_.intern(m.text);
         } else if (m.type == TokenType::Hash) {
             Token idTok = consumeToken();
             if (idTok.type == TokenType::HashIdent) {
@@ -651,9 +656,11 @@ bool CSSParser::parseDeclarations(std::vector<std::pair<const char*, const char*
         if (match(TokenType::RBrace)) { pushBack(Token{TokenType::RBrace, "}", line_, col_}); break; }
         if (match(TokenType::EOF_)) break;
 
-        std::pair<const char*, const char*> decl;
-        if (!parseDeclaration(decl)) break;
-        out.emplace_back(decl.first, decl.second);
+        std::vector<std::pair<const char*, const char*>> decls;
+        if (!parseDeclaration(decls)) break;
+        for (auto& decl : decls) {
+            out.emplace_back(decl.first, decl.second);
+        }
 
         skipWhitespace();
         if (!match(TokenType::Semicolon)) {
@@ -666,7 +673,7 @@ bool CSSParser::parseDeclarations(std::vector<std::pair<const char*, const char*
     return true;
 }
 
-bool CSSParser::parseDeclaration(std::pair<const char*, const char*>& out) {
+bool CSSParser::parseDeclaration(std::vector<std::pair<const char*, const char*>>& out) {
     Token propTok = consumeToken();
     if (propTok.type != TokenType::Ident) {
         pushBack(propTok);
@@ -675,10 +682,8 @@ bool CSSParser::parseDeclaration(std::pair<const char*, const char*>& out) {
 
     const char* property = pool_.intern(propTok.text);
 
-    // Consume optional colon
     if (!match(TokenType::Colon)) return false;
 
-    // Consume value tokens until we hit a terminator
     std::string value;
     bool first = true;
     while (!isEOF()) {
@@ -701,16 +706,13 @@ bool CSSParser::parseDeclaration(std::pair<const char*, const char*>& out) {
         first = false;
     }
 
-    // Expand shorthands
     std::vector<ShorthandExpansion> expansions;
     if (expandShorthand(property, value.c_str(), expansions)) {
         for (const auto& exp : expansions) {
-            out.first = exp.property;
-            out.second = exp.value;
+            out.emplace_back(exp.property, exp.value);
         }
     } else {
-        out.first = property;
-        out.second = pool_.intern(value);
+        out.emplace_back(property, pool_.intern(value));
     }
 
     return true;
@@ -808,15 +810,15 @@ bool CSSParser::expandMargin(const std::string& value, std::vector<ShorthandExpa
     const char* base = pool_.intern("margin");
     if (parts.empty()) return false;
 
-    std::string v0 = pool_.intern(parts[0]);
-    std::string v1 = parts.size() > 1 ? pool_.intern(parts[1]) : v0;
-    std::string v2 = parts.size() > 2 ? pool_.intern(parts[2]) : v0;
-    std::string v3 = parts.size() > 3 ? pool_.intern(parts[3]) : v1;
+    const char* v0 = pool_.intern(parts[0]);
+    const char* v1 = parts.size() > 1 ? pool_.intern(parts[1]) : v0;
+    const char* v2 = parts.size() > 2 ? pool_.intern(parts[2]) : v0;
+    const char* v3 = parts.size() > 3 ? pool_.intern(parts[3]) : v1;
 
-    out.push_back({pool_.intern(std::string(base) + "-top"), v0.c_str()});
-    out.push_back({pool_.intern(std::string(base) + "-right"), v1.c_str()});
-    out.push_back({pool_.intern(std::string(base) + "-bottom"), v2.c_str()});
-    out.push_back({pool_.intern(std::string(base) + "-left"), v3.c_str()});
+    out.push_back({pool_.intern(std::string(base) + "-top"), v0});
+    out.push_back({pool_.intern(std::string(base) + "-right"), v1});
+    out.push_back({pool_.intern(std::string(base) + "-bottom"), v2});
+    out.push_back({pool_.intern(std::string(base) + "-left"), v3});
     return true;
 }
 
@@ -825,15 +827,15 @@ bool CSSParser::expandPadding(const std::string& value, std::vector<ShorthandExp
     const char* base = pool_.intern("padding");
     if (parts.empty()) return false;
 
-    std::string v0 = pool_.intern(parts[0]);
-    std::string v1 = parts.size() > 1 ? pool_.intern(parts[1]) : v0;
-    std::string v2 = parts.size() > 2 ? pool_.intern(parts[2]) : v0;
-    std::string v3 = parts.size() > 3 ? pool_.intern(parts[3]) : v1;
+    const char* v0 = pool_.intern(parts[0]);
+    const char* v1 = parts.size() > 1 ? pool_.intern(parts[1]) : v0;
+    const char* v2 = parts.size() > 2 ? pool_.intern(parts[2]) : v0;
+    const char* v3 = parts.size() > 3 ? pool_.intern(parts[3]) : v1;
 
-    out.push_back({pool_.intern(std::string(base) + "-top"), v0.c_str()});
-    out.push_back({pool_.intern(std::string(base) + "-right"), v1.c_str()});
-    out.push_back({pool_.intern(std::string(base) + "-bottom"), v2.c_str()});
-    out.push_back({pool_.intern(std::string(base) + "-left"), v3.c_str()});
+    out.push_back({pool_.intern(std::string(base) + "-top"), v0});
+    out.push_back({pool_.intern(std::string(base) + "-right"), v1});
+    out.push_back({pool_.intern(std::string(base) + "-bottom"), v2});
+    out.push_back({pool_.intern(std::string(base) + "-left"), v3});
     return true;
 }
 
@@ -869,15 +871,15 @@ bool CSSParser::expandBorderRadius(const std::string& value, std::vector<Shortha
     auto parts = split(value);
     if (parts.empty()) return false;
 
-    std::string v0 = pool_.intern(parts[0]);
-    std::string v1 = parts.size() > 1 ? pool_.intern(parts[1]) : v0;
-    std::string v2 = parts.size() > 2 ? pool_.intern(parts[2]) : v0;
-    std::string v3 = parts.size() > 3 ? pool_.intern(parts[3]) : v1;
+    const char* v0 = pool_.intern(parts[0]);
+    const char* v1 = parts.size() > 1 ? pool_.intern(parts[1]) : v0;
+    const char* v2 = parts.size() > 2 ? pool_.intern(parts[2]) : v0;
+    const char* v3 = parts.size() > 3 ? pool_.intern(parts[3]) : v1;
 
-    out.push_back({"border-top-left-radius",     v0.c_str()});
-    out.push_back({"border-top-right-radius",    v1.c_str()});
-    out.push_back({"border-bottom-right-radius", v2.c_str()});
-    out.push_back({"border-bottom-left-radius",  v3.c_str()});
+    out.push_back({"border-top-left-radius",     v0});
+    out.push_back({"border-top-right-radius",    v1});
+    out.push_back({"border-bottom-right-radius", v2});
+    out.push_back({"border-bottom-left-radius",  v3});
     return true;
 }
 

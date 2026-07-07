@@ -295,12 +295,7 @@ Cascade::Cascade(std::vector<ResolvedMediaSheet> mediaSheets, int viewportWidth)
     : mediaSheets_(std::move(mediaSheets))
     , viewportWidth_(viewportWidth) {}
 
-Cascade::~Cascade() {
-    for (auto* ptr : allocatedStyles_) {
-        delete ptr;
-    }
-    allocatedStyles_.clear();
-}
+Cascade::~Cascade() = default;
 
 void Cascade::applyInlineStyles(html::DOMNode* element) {
     auto it = element->attributes.find("style");
@@ -650,14 +645,11 @@ std::vector<std::string> Cascade::splitClasses(const std::string& classAttr) {
 void Cascade::applyCascadeToElement(html::DOMNode* element) {
     if (!element) return;
 
-    if (element->style == nullptr) {
-        element->style = new ComputedStyle{};
-        allocatedStyles_.push_back(element->style);
+    if (!element->style) {
+        element->style = std::make_unique<ComputedStyle>();
     } else {
         *element->style = ComputedStyle{};
     }
-
-    applyInlineStyles(element);
 
     for (const auto& rms : mediaSheets_) {
         if (!rms.condition.matches(viewportWidth_)) continue;
@@ -684,6 +676,8 @@ void Cascade::applyCascadeToElement(html::DOMNode* element) {
             applyDeclarations(element, rms.sheet.rules[m.first].declarations);
         }
     }
+
+    applyInlineStyles(element);
 }
 
 void Cascade::resolve(html::DOMNode* document) {

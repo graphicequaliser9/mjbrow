@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -41,7 +42,7 @@ public:
     DOMNode* lastChild{nullptr};
     DOMNode* nextSibling{nullptr};
     DOMNode* prevSibling{nullptr};
-    css::ComputedStyle* style{nullptr};
+    std::unique_ptr<css::ComputedStyle> style;
 
     /// @brief Tag name for Element nodes; empty for Document / Text / Comment.
     std::string tagName;
@@ -85,6 +86,12 @@ public:
     DOMNode* getChildByIndex(uint32_t index);
 
     ~DOMNode();
+    DOMNode() = default;
+    DOMNode(const DOMNode& other);
+    DOMNode& operator=(const DOMNode& other) = delete;
+
+    /// @brief Recursively clones this node and all descendants.
+    DOMNode* cloneNode() const;
 
 private:
     /// @brief Friend class for efficient memory pool access.
