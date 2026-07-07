@@ -12,6 +12,7 @@
 #include "devtools/PaintProfiler.h"
 #include "core/Win32Window.h"
 #include "html/DOMNode.h"
+#include "render/Painter.h"
 #include "util/Logging.h"
 
 #include <algorithm>
@@ -311,20 +312,37 @@ void BrowserUI::renderDevToolsOverlay() {
 }
 
 void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
-    if (auto* tab = activeTab()) {
-        // Fill with white background
-        HBRUSH hbrWhite = CreateSolidBrush(RGB(255, 255, 255));
-        FillRect(hdc, &rcClip, hbrWhite);
-        DeleteObject(hbrWhite);
+#ifdef _WIN32
+    // Composite the page with the GDI+ painter (ARGB-aware, alpha-composited).
+    render::Win32Painter painter(hdc);
+    painter.begin();
 
-        // Draw body text if available
-        std::string text = tab->bodyText();
-        if (!text.empty()) {
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(0, 0, 0));
-            DrawTextA(hdc, text.c_str(), -1, &rcClip, DT_LEFT | DT_TOP | DT_WORDBREAK);
+    // Opaque white page background over the dirty rectangle.
+    painter.fillRect(rcClip.left, rcClip.top,
+                     rcClip.right - rcClip.left, rcClip.bottom - rcClip.top,
+                     0xFFFFFFFF);
+
+    if (auto* tab = activeTab()) {
+        if (auto* doc = tab->document()) {
+            // Real DOM paint: backgrounds, text (glyph-cached + batched),
+            // borders, driven by ComputedStyle and a simple flow layout.
+            painter.paintDocument(static_cast<html::Document*>(doc),
+                                  tab->webView()->width,
+                                  tab->webView()->scrollX,
+                                  tab->webView()->scrollY);
+        } else {
+            // Fallback for documents that have not yet produced a DOM tree.
+            std::string text = tab->bodyText();
+            if (!text.empty()) {
+                painter.drawText(rcClip.left + 8, rcClip.top + 8, text, 0xFF000000);
+            }
         }
     }
+
+    painter.end();
+#else
+    (void)hdc; (void)rcClip;
+#endif
 }
 
 // Wide-string overload for VS template integration
