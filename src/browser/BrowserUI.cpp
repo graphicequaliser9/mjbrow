@@ -15,12 +15,15 @@
 #include "util/Logging.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <functional>
 #include <iomanip>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -317,13 +320,81 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
         FillRect(hdc, &rcClip, hbrWhite);
         DeleteObject(hbrWhite);
 
-        // Draw body text if available
-        std::string text = tab->bodyText();
-        if (!text.empty()) {
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(0, 0, 0));
-            DrawTextA(hdc, text.c_str(), -1, &rcClip, DT_LEFT | DT_TOP | DT_WORDBREAK);
+        html::DOMNode* doc = tab->document();
+        if (!doc) return;
+
+        // Resolve the <html> element (fall back to the document root).
+        html::DOMNode* root = doc;
+        for (html::DOMNode* c = doc->firstChild; c; c = c->nextSibling) {
+            if (c->nodeType == html::NodeType::Element && c->tagName == "html") {
+                root = c;
+                break;
+            }
         }
+
+        // Walk the DOM tree and paint element blocks + text nodes.
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(0, 0, 0));
+
+        // Local recursive renderer with a vertical pen position.
+        std::function<void(html::DOMNode*, int, int&)> renderNode =
+            [&](html::DOMNode* node, int indent, int& y) {
+                if (!node) return;
+                const int left = rcClip.left + 12 + indent * 16;
+                const int right = rcClip.right - 12;
+
+                if (node->nodeType == html::NodeType::Text) {
+                    std::string text = node->textContent;
+                    // Skip pure whitespace-only text nodes.
+                    bool onlyWs = true;
+                    for (char ch : text) if (!std::isspace(static_cast<unsigned char>(ch))) { onlyWs = false; break; }
+                    if (onlyWs) return;
+                    RECT rc{left, y, right, rcClip.bottom};
+                    DrawTextA(hdc, text.c_str(), -1, &rc, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_CALCRECT);
+                    DrawTextA(hdc, text.c_str(), -1, &rc, DT_LEFT | DT_TOP | DT_WORDBREAK);
+                    y = rc.bottom + 2;
+                } else if (node->nodeType == html::NodeType::Element) {
+                    // Block-level elements get a light rectangle outline.
+                    static const std::vector<std::string> blocks = {
+                        "html","head","body","div","p","section","article","header","footer",
+                        "ul","ol","li","table","thead","tbody","tfoot","tr","td","th","blockquote"
+                    };
+                    bool isBlock = false;
+                    for (const auto& b : blocks) if (node->tagName == b) { isBlock = true; break; }
+
+                    if (isBlock) {
+                        int startY = y;
+                        // Recurse into children first (this draws their text and
+                        // advances the pen position).
+                        int childIndent = (node->tagName == "td" || node->tagName == "th") ? 0 : 1;
+                        for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
+                            renderNode(c, childIndent, y);
+                        }
+                        // Draw a light border rectangle around the block so the
+                        // element's box is visible without covering its content.
+                        RECT boxRc{left, startY, right, y};
+                        if (boxRc.bottom > boxRc.top) {
+                            HBRUSH hbrBox = CreateSolidBrush(RGB(150, 175, 200));
+                            FrameRect(hdc, &boxRc, hbrBox);
+                            DeleteObject(hbrBox);
+                        }
+                        y += 4;
+                    } else {
+                        // Inline element: just render its children inline.
+                        for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
+                            renderNode(c, 0, y);
+                        }
+                    }
+                } else {
+                    // Document / Comment: recurse into children.
+                    for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
+                        renderNode(c, indent, y);
+                    }
+                }
+            };
+
+        int y = rcClip.top + 12;
+        renderNode(root, 0, y);
     }
 }
 

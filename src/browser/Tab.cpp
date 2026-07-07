@@ -61,12 +61,14 @@ void Tab::navigate(const std::string& url) {
     }
 
     parseHTML(rawHtml_);
-    
+
     html::DOMNode* bodyNode = nullptr;
-    for (html::DOMNode* child = documentRaw_ ? documentRaw_->firstChild : nullptr; child; child = child->nextSibling) {
-        if (child->nodeType == html::NodeType::Element && child->tagName == "body") {
-            bodyNode = child;
-            break;
+    if (document_) {
+        for (html::DOMNode* child = document_->firstChild; child; child = child->nextSibling) {
+            if (child->nodeType == html::NodeType::Element && child->tagName == "body") {
+                bodyNode = child;
+                break;
+            }
         }
     }
     bodyText_ = extractTextContent(bodyNode);
@@ -77,7 +79,7 @@ void Tab::navigate(const std::string& url) {
 }
 
 void Tab::tick(double dtMs) {
-    if (loading_ || !documentRaw_) return;
+    if (loading_ || !document_) return;
 
     // JS VM tick (requestAnimationFrame injection point in a full engine)
     if (vm_) {
@@ -89,8 +91,8 @@ void Tab::tick(double dtMs) {
 }
 
 std::string Tab::title() const {
-    if (!documentRaw_) return url_;
-    for (html::DOMNode* child = documentRaw_->firstChild; child; child = child->nextSibling) {
+    if (!document_) return url_;
+    for (html::DOMNode* child = document_->firstChild; child; child = child->nextSibling) {
         if (child->nodeType == html::NodeType::Element && child->tagName == "title") {
             std::string result;
             for (html::DOMNode* textChild = child->firstChild; textChild; textChild = textChild->nextSibling) {
@@ -105,7 +107,7 @@ std::string Tab::title() const {
 }
 
 void Tab::clear() {
-    documentRaw_ = nullptr;
+    document_.reset();
     vm_.reset();
     url_.clear();
     rawHtml_.clear();
@@ -117,27 +119,27 @@ js::VM* Tab::vm() const { return vm_.get(); }
 // ── private helpers ──────────────────────────────────────────────────────
 
 void Tab::parseHTML(const std::string& html) {
-    static html::HTMLParser parser;
-    documentRaw_ = parser.parse(html);
+    html::HTMLParser parser;
+    document_ = std::unique_ptr<html::Document>(parser.parse(html));
 }
 
 void Tab::cascadeStyles() {
     // Stub
-    (void)documentRaw_;
+    (void)document_;
 }
 
 void Tab::performLayout() {
     // Stub
-    (void)documentRaw_;
+    (void)document_;
 }
 
 void Tab::paintFrame() {
-    if (!documentRaw_) {
+    if (!document_) {
         bodyText_ = "(no content loaded)";
         return;
     }
     html::DOMNode* bodyNode = nullptr;
-    for (html::DOMNode* child = documentRaw_->firstChild; child; child = child->nextSibling) {
+    for (html::DOMNode* child = document_->firstChild; child; child = child->nextSibling) {
         if (child->nodeType == html::NodeType::Element && child->tagName == "body") {
             bodyNode = child;
             break;

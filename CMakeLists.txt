@@ -65,3 +65,15 @@ endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+
+# ── Tests ───────────────────────────────────────────────────────────────────
+# DOM unit test: exercises the tokeniser, tree builder, DOM node types, and
+# innerHTML setter.  Builds cross-platform (no Win32 dependencies).
+enable_testing()
+
+add_executable(DOMTest
+    tests/DOMTest.cpp
+    src/html/HTMLParser.cpp
+)
+target_include_directories(DOMTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME DOMTest COMMAND DOMTest)
