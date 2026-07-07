@@ -14,6 +14,8 @@
 #include <string>
 #include <memory>
 
+#include "html/DOMNode.h"
+
 // Forward declarations – we include the real headers only in Tab.cpp.
 namespace html { class DOMNode; }
 namespace js   { class VM; }
@@ -84,7 +86,7 @@ void goBack()    { /* TODO: history */ navigate(url_); }
     /**
      * @brief Returns the root DOM node (or nullptr if no document loaded).
      */
-    html::DOMNode* document() const { return documentRaw_; }
+    html::DOMNode* document() const { return document_.get(); }
 
     std::string bodyText() const { return bodyText_; }
 
@@ -134,7 +136,7 @@ private:
     std::string url_;                      ///< Navigated URL
     std::string rawHtml_;                  ///< Last-fetched raw source
     std::string bodyText_;                   ///< Extracted body text for rendering
-    html::DOMNode* documentRaw_{nullptr};    ///< Raw pointer to parsed document
+    std::unique_ptr<html::Document> document_; ///< Owned parsed document
     std::unique_ptr<js::VM> vm_;            ///< Per-tab JS engine
     WebView  webView_;                     ///< Viewport + scroll state
     bool     loading_{true};               ///< True until first paint completes

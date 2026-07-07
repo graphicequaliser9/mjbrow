@@ -1,8 +1,10 @@
 /**
  * @file HTMLParser.h
- * @brief HTML5 parser scaffolding.
- * @details HTML5 parser: tokeniser, tree-builder, DOM node types, innerHTML setter.
- *          Doubles as html/Tokenizer.h — the tokeniser lives here for now.
+ * @brief HTML5 parser entry point.
+ * @details Orchestrates the tokeniser (html/Tokenizer.h) and tree builder
+ *          (html/TreeBuilder.h) to produce a real DOM tree rooted at a
+ *          html::Document.  This header is a thin wrapper; the heavy lifting
+ *          lives in Tokenizer.h and TreeBuilder.h.
  * @copyright 2026, Nitrogen Browser Project
  */
 
@@ -12,28 +14,8 @@
 #include <string>
 #include <vector>
 
-// --- html/Tokenizer.h ---
-
-namespace html {
-
-enum class TokenType {
-    DOCTYPE,
-    StartTag,
-    EndTag,
-    Comment,
-    Character,
-    EOF_TOKEN,
-};
-
-struct Token {
-    TokenType type;
-    std::string data;        ///< tag name, character data, comment text, etc.
-    std::vector<std::pair<std::string, std::string>> attributes; // attr key/value pairs
-};
-
-} // namespace html
-
-// --- html/HTMLParser.h ---
+#include "html/Tokenizer.h"
+#include "html/DOMNode.h"
 
 namespace html {
 
@@ -42,13 +24,21 @@ public:
     HTMLParser();
     ~HTMLParser();
 
-    /// @brief Parses HTML input and returns the root document node.
-    /// @param html The HTML string to parse.
-    /// @return Pointer to the root document node.
-    class DOMNode* parse(const std::string& html);
+    /**
+     * @brief Parses HTML input and returns a freshly-allocated Document.
+     * @param html The HTML source string to parse.
+     * @return Pointer to a heap-allocated Document (ownership transfers to caller).
+     * @note The returned pointer must be deleted by the caller (or stored in a
+     *       std::unique_ptr<Document>).
+     */
+    Document* parse(const std::string& html);
 
-private:
-    // Placeholder for internal state
+    /**
+     * @brief Parses HTML into an existing Document, replacing its children.
+     * @param doc  The document to populate (its existing children are cleared).
+     * @param html The HTML source string to parse.
+     */
+    void parseInto(Document& doc, const std::string& html);
 };
 
 } // namespace html
