@@ -75,11 +75,24 @@ set(TABLE_BENCH_SOURCES
 )
 add_executable(nitrogen_table_bench ${TABLE_BENCH_SOURCES})
 
+# ── Painter unit test (Bead 6) ─────────────────────────────────────────────────
+# Cross-platform: exercises the platform-independent glyph-cache + text-batching
+# logic (no Win32 dependency).  On Windows the same Painter.cpp also provides the
+# GDI+ Win32Painter used by the main executable.
+set(PAINTER_TEST_SOURCES
+    bench/PainterTest.cpp
+    src/render/Painter.cpp
+)
+add_executable(nitrogen_painter_test ${PAINTER_TEST_SOURCES})
+
 # Windows subsystem (GUI app).  Omit this flag on Linux/macOS so that stdout works.
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
+    # GDI+ (compositing back-end for the Win32Painter).
+    target_link_libraries(${PROJECT_NAME} gdiplus)
+    target_link_libraries(nitrogen_painter_test gdiplus)
 endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
