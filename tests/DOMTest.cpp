@@ -762,6 +762,145 @@ static void testVoidElementsInBody() {
 }
 
 
+// ── Bead 4: DOM integration + query API ───────────────────────────────────────
+
+// Helper: extract text only from the <body> element (legacy "body-only" view).
+static std::string bodyOnlyText(const DOMNode* doc) {
+    const DOMNode* body = nullptr;
+    for (const DOMNode* c = doc->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == NodeType::Element && c->tagName == "html") {
+            for (const DOMNode* h = c->firstChild; h; h = h->nextSibling) {
+                if (h->nodeType == NodeType::Element && h->tagName == "body") { body = h; break; }
+            }
+            break;
+        }
+    }
+    if (!body) return "";
+    std::string out;
+    for (const DOMNode* c = body->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == NodeType::Text) out += c->textContent;
+        else if (c->nodeType == NodeType::Element) out += textContentOf(c);
+    }
+    return out;
+}
+
+static void testBead4NestedPageDOM() {
+    // A page with nested divs, spans, and tables plus head content.
+    HTMLParser parser;
+    Document* doc = parser.parse(
+        "<!DOCTYPE html>"
+        "<html>"
+        "  <head><title>Page Heading</title></head>"
+        "  <body>"
+        "    <div id='outer' class='wrap'>"
+        "      <div id='inner' class='box highlight'>"
+        "        <span class='label'>Hello</span>"
+        "        <span class='value'>World</span>"
+        "      </div>"
+        "      <table id='grid'>"
+        "        <tr><td>A1</td><td>A2</td></tr>"
+        "        <tr><td>B1</td><td>B2</td></tr>"
+        "      </table>"
+        "    </div>"
+        "  </body>"
+        "</html>");
+
+    CHECK(doc != nullptr);
+
+    // --- DOM tree built correctly: nested divs ---
+    const DOMNode* outer = doc->getElementById("outer");
+    CHECK(outer != nullptr);
+    CHECK(outer->tagName == "div");
+    CHECK(outer->hasAttribute("class"));
+    CHECK(*outer->getAttribute("class") == "wrap");
+
+    const DOMNode* inner = doc->getElementById("inner");
+    CHECK(inner != nullptr);
+    // #inner is nested inside #outer (descendant), not a sibling.
+    bool isDescendant = false;
+    for (const DOMNode* c = outer->firstChild; c; c = c->nextSibling) {
+        if (c == inner) { isDescendant = true; break; }
+    }
+    CHECK(isDescendant);
+
+    // --- DOM tree built correctly: table nesting ---
+    const DOMNode* grid = doc->getElementById("grid");
+    CHECK(grid != nullptr);
+    const DOMNode* tbody = firstElementChild(grid, "tbody");
+    CHECK(tbody != nullptr);
+    CHECK(countElementChildren(tbody) == 2);   // two <tr>
+
+    // --- query API: getElementsByTagName ---
+    auto divs = doc->getElementsByTagName("div");
+    CHECK(divs.size() == 2);
+    auto spans = doc->getElementsByTagName("span");
+    CHECK(spans.size() == 2);
+    auto tds = doc->getElementsByTagName("td");
+    CHECK(tds.size() == 4);
+    auto everything = doc->getElementsByTagName("*");
+    CHECK(everything.size() >= 12);   // html, head, title, body, 2 div, 2 span, table, tbody, 2 tr, 4 td
+
+    // --- query API: querySelector / querySelectorAll (tag, class) ---
+    const DOMNode* firstSpan = doc->querySelector("span");
+    CHECK(firstSpan != nullptr);
+    CHECK(firstSpan->tagName == "span");
+    CHECK(textContentOf(firstSpan) == "Hello");
+
+    auto allSpans = doc->querySelectorAll("span.value");
+    CHECK(allSpans.size() == 1);
+    CHECK(textContentOf(allSpans[0]) == "World");
+
+    // --- query API: compound with id + class ---
+    const DOMNode* sel = doc->querySelector("div.box#inner");
+    CHECK(sel != nullptr);
+    CHECK(sel == inner);
+
+    // --- query API: descendant combinator ---
+    const DOMNode* td = doc->querySelector("table#grid td");
+    CHECK(td != nullptr);
+    CHECK(td->tagName == "td");
+    CHECK(textContentOf(td) == "A1");
+
+    auto allTds = doc->querySelectorAll("#grid td");
+    CHECK(allTds.size() == 4);
+
+    // --- full-text extraction: ALL text nodes, not just body ---
+    std::string full = doc->gatherText();
+    // Head text (title) must be present even though it is outside <body>.
+    CHECK(full.find("Page Heading") != std::string::npos);
+    CHECK(full.find("Hello") != std::string::npos);
+    CHECK(full.find("World") != std::string::npos);
+    CHECK(full.find("A1") != std::string::npos);
+    CHECK(full.find("B2") != std::string::npos);
+
+    // The legacy body-only extraction must NOT see the title text, proving the
+    // new full-tree extraction is more complete.
+    std::string bodyOnly = bodyOnlyText(doc);
+    CHECK(bodyOnly.find("Page Heading") == std::string::npos);
+    CHECK(bodyOnly.find("Hello") != std::string::npos);
+
+    delete doc;
+}
+
+static void testBead4QueryNoMatch() {
+    HTMLParser parser;
+    Document* doc = parser.parse("<div id='a'><p class='x'>hi</p></div>");
+
+    // Non-existent id / tag / class → nullptr / empty.
+    CHECK(doc->getElementById("nope") == nullptr);
+    CHECK(doc->querySelector("#nope") == nullptr);
+    CHECK(doc->querySelectorAll(".missing").empty());
+
+    // Class that exists on a different element should not match.
+    CHECK(doc->querySelector("p.missing") == nullptr);
+    // Child combinator: p is a child of div, so this matches.
+    CHECK(doc->querySelector("div > p") != nullptr);
+    // Descendant with class.
+    CHECK(doc->querySelector("div p.x") != nullptr);
+
+    delete doc;
+}
+
 // ── main ───────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -789,6 +928,9 @@ int main() {
     testImplicitPClose();
     testComplexHtml();
     testVoidElementsInBody();
+
+    testBead4NestedPageDOM();
+    testBead4QueryNoMatch();
 
     std::cout << g_checks << " checks, " << g_failures << " failures\n";
     return g_failures == 0 ? 0 : 1;

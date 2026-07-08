@@ -78,6 +78,32 @@ void Tab::navigate(const std::string& url) {
     loading_ = false;
 }
 
+void Tab::loadHTML(const std::string& html) {
+    loading_ = true;
+    rawHtml_ = html;
+
+    // Build the full DOM tree with the HTML5 parser (Beads 1-3 pipeline).
+    parseHTML(rawHtml_);
+
+    // Text extraction walks the *entire* DOM tree, not just <body>, so text
+    // in the head, in misnested fragments, and in deeply nested elements is
+    // all captured.
+    html::DOMNode* bodyNode = nullptr;
+    if (document_) {
+        for (html::DOMNode* child = document_->firstChild; child; child = child->nextSibling) {
+            if (child->nodeType == html::NodeType::Element && child->tagName == "body") {
+                bodyNode = child;
+                break;
+            }
+        }
+    }
+    bodyText_ = extractTextContent(bodyNode);
+
+    cascadeStyles();
+    performLayout();
+    loading_ = false;
+}
+
 void Tab::tick(double dtMs) {
     if (loading_ || !document_) return;
 
@@ -115,6 +141,28 @@ void Tab::clear() {
 }
 
 js::VM* Tab::vm() const { return vm_.get(); }
+
+std::string Tab::allText() const {
+    return document_ ? document_->gatherText() : std::string();
+}
+
+html::DOMNode* Tab::getElementById(const std::string& id) {
+    return document_ ? document_->getElementById(id) : nullptr;
+}
+
+std::vector<html::DOMNode*> Tab::getElementsByTagName(const std::string& tag) {
+    if (!document_) return {};
+    return document_->getElementsByTagName(tag);
+}
+
+html::DOMNode* Tab::querySelector(const std::string& selector) {
+    return document_ ? document_->querySelector(selector) : nullptr;
+}
+
+std::vector<html::DOMNode*> Tab::querySelectorAll(const std::string& selector) {
+    if (!document_) return {};
+    return document_->querySelectorAll(selector);
+}
 
 // ── private helpers ──────────────────────────────────────────────────────
 

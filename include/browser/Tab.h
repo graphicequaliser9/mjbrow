@@ -13,6 +13,7 @@
 
 #include <string>
 #include <memory>
+#include <vector>
 
 #include "html/DOMNode.h"
 
@@ -89,6 +90,40 @@ void goBack()    { /* TODO: history */ navigate(url_); }
     html::DOMNode* document() const { return document_.get(); }
 
     std::string bodyText() const { return bodyText_; }
+
+    /**
+     * @brief Returns the concatenation of every Text node in the document
+     *        (not just the body), built by walking the full DOM tree.
+     */
+    std::string allText() const;
+
+    // ── DOM query API (Bead 4) ───────────────────────────────────────────────
+
+    /**
+     * @brief Returns the first element in the document with the given id.
+     */
+    html::DOMNode* getElementById(const std::string& id);
+
+    /**
+     * @brief Returns every element whose tagName matches @p tag (case-insensitive).
+     */
+    std::vector<html::DOMNode*> getElementsByTagName(const std::string& tag);
+
+    /**
+     * @brief Returns the first element matching @p selector.
+     */
+    html::DOMNode* querySelector(const std::string& selector);
+
+    /**
+     * @brief Returns all elements matching @p selector, in document order.
+     */
+    std::vector<html::DOMNode*> querySelectorAll(const std::string& selector);
+
+    /**
+     * @brief Parses an HTML string directly into this tab (no network fetch).
+     *        Used by the integration pipeline and headless harnesses.
+     */
+    void loadHTML(const std::string& html);
 
     /**
      * @brief Returns the title for the tab strip (<title> element textContent).
