@@ -93,6 +93,28 @@ public:
     ///        Used internally to support move semantics for add/insert/replace.
     void unlink(DOMNode* child);
 
+    // --- query / traversal API (Bead 4) ---
+
+    /// @brief Recursively concatenates the content of every descendant Text
+    ///        node (the DOM `textContent` accessor, minus the data member of
+    ///        the same conceptual name which is the per-node raw text).
+    std::string gatherText() const;
+
+    /// @brief Returns the first element in the subtree (depth-first) whose `id`
+    ///        attribute equals @p id, or nullptr when none matches.
+    DOMNode* getElementById(const std::string& id);
+
+    /// @brief Returns every element in the subtree (document order) whose
+    ///        tagName matches @p tag (case-insensitive). "*" matches all tags.
+    std::vector<DOMNode*> getElementsByTagName(const std::string& tag);
+
+    /// @brief Returns the first element matching @p selector, or nullptr.
+    ///        Supports tag, #id, .class, and descendant/child combinators.
+    DOMNode* querySelector(const std::string& selector);
+
+    /// @brief Returns all elements matching @p selector, in document order.
+    std::vector<DOMNode*> querySelectorAll(const std::string& selector);
+
     ~DOMNode();
 };
 
