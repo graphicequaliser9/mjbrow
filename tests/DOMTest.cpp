@@ -246,6 +246,218 @@ static void testSetInnerHTML() {
     // `doc` owns `div` and all of its children; let the destructor clean up.
 }
 
+// ── manual DOM tree construction + traversal (Bead 1) ──────────────────────────
+
+static void testManualTreeTraversal() {
+    // Build manually:
+    //   doc
+    //    └─ html
+    //         ├─ head
+    //         └─ body
+    //              ├─ p  ("Hello ")
+    //              └─ div
+    //                   └─ span ("world")
+    Document doc;
+
+    DOMNode* html = new DOMNode();
+    html->nodeType = NodeType::Element;
+    html->tagName = "html";
+    doc.appendChild(html);
+
+    DOMNode* head = new DOMNode();
+    head->nodeType = NodeType::Element;
+    head->tagName = "head";
+    html->appendChild(head);
+
+    DOMNode* body = new DOMNode();
+    body->nodeType = NodeType::Element;
+    body->tagName = "body";
+    html->appendChild(body);
+
+    DOMNode* p = new DOMNode();
+    p->nodeType = NodeType::Element;
+    p->tagName = "p";
+    p->setAttribute("class", "lead");
+    body->appendChild(p);
+
+    DOMNode* pText = new DOMNode();
+    pText->nodeType = NodeType::Text;
+    pText->textContent = "Hello ";
+    p->appendChild(pText);
+
+    DOMNode* div = new DOMNode();
+    div->nodeType = NodeType::Element;
+    div->tagName = "div";
+    body->appendChild(div);
+
+    DOMNode* span = new DOMNode();
+    span->nodeType = NodeType::Element;
+    span->tagName = "span";
+    div->appendChild(span);
+
+    DOMNode* spanText = new DOMNode();
+    spanText->nodeType = NodeType::Text;
+    spanText->textContent = "world";
+    span->appendChild(spanText);
+
+    // --- traversal checks ---
+    CHECK(doc.firstChild == html);
+    CHECK(html->parent == &doc);
+    CHECK(html->firstChild == head);
+    CHECK(html->lastChild == body);
+    CHECK(head->nextSibling == body);
+    CHECK(body->prevSibling == head);
+    CHECK(body->firstChild == p);
+    CHECK(body->lastChild == div);
+    CHECK(p->nextSibling == div);
+    CHECK(div->prevSibling == p);
+    CHECK(p->firstChild == pText);
+    CHECK(div->firstChild == span);
+    CHECK(span->firstChild == spanText);
+
+    // --- ownerDocument propagation (Document owns itself + subtree) ---
+    CHECK(html->ownerDocument == &doc);
+    CHECK(body->ownerDocument == &doc);
+    CHECK(p->ownerDocument == &doc);
+    CHECK(spanText->ownerDocument == &doc);
+
+    // --- attribute helpers ---
+    CHECK(p->hasAttribute("class"));
+    CHECK(*p->getAttribute("class") == "lead");
+    CHECK(!p->hasAttribute("id"));
+    p->setAttribute("id", "intro");
+    CHECK(*p->getAttribute("id") == "intro");
+    CHECK(p->hasAttributes());
+    p->removeAttribute("class");
+    CHECK(!p->hasAttribute("class"));
+
+    // --- textContent extraction via recursive walk ---
+    CHECK(textContentOf(&doc) == "Hello world");
+
+    // `doc` owns the whole subtree; its destructor frees everything.
+}
+
+static void testInsertBeforeReplaceRemove() {
+    Document doc;
+    DOMNode* root = new DOMNode();
+    root->nodeType = NodeType::Element;
+    root->tagName = "root";
+    doc.appendChild(root);
+
+    DOMNode* a = new DOMNode(); a->nodeType = NodeType::Element; a->tagName = "a";
+    DOMNode* b = new DOMNode(); b->nodeType = NodeType::Element; b->tagName = "b";
+    DOMNode* c = new DOMNode(); c->nodeType = NodeType::Element; c->tagName = "c";
+    root->appendChild(a);
+    root->appendChild(b);
+    root->appendChild(c);
+
+    // Insert x before b: order becomes a, x, b, c.
+    DOMNode* x = new DOMNode(); x->nodeType = NodeType::Element; x->tagName = "x";
+    root->insertBefore(x, b);
+    CHECK(root->firstChild == a);
+    CHECK(a->nextSibling == x);
+    CHECK(x->nextSibling == b);
+    CHECK(b->prevSibling == x);
+    CHECK(x->ownerDocument == &doc);
+
+    // insertBefore with null child appends.
+    DOMNode* y = new DOMNode(); y->nodeType = NodeType::Element; y->tagName = "y";
+    root->insertBefore(y, nullptr);
+    CHECK(root->lastChild == y);
+
+    // Replace b with z: order a, x, z, c, y. The old node `b` is freed by
+    // replaceChild, so we only assert on the surviving (valid) nodes.
+    DOMNode* z = new DOMNode(); z->nodeType = NodeType::Element; z->tagName = "z";
+    root->replaceChild(z, b);
+    CHECK(x->nextSibling == z);
+    CHECK(z->nextSibling == c);
+    CHECK(z->prevSibling == x);
+    CHECK(z->ownerDocument == &doc);
+
+    // removeChild y.
+    root->removeChild(y);
+    CHECK(root->lastChild == c);
+    CHECK(c->nextSibling == nullptr);
+
+    // Move semantics: re-append a (already a child) keeps a single copy.
+    size_t count = 0;
+    for (DOMNode* n = root->firstChild; n; n = n->nextSibling) ++count;
+    root->appendChild(a);   // move a to the end
+    size_t count2 = 0;
+    for (DOMNode* n = root->firstChild; n; n = n->nextSibling) ++count2;
+    CHECK(count == count2);  // same number of children (no duplication)
+    CHECK(root->lastChild == a);
+
+    // delete doc frees the entire tree.
+}
+
+static void testCloneNode() {
+    Document doc;
+    DOMNode* div = new DOMNode();
+    div->nodeType = NodeType::Element;
+    div->tagName = "div";
+    div->setAttribute("id", "box");
+    doc.appendChild(div);
+
+    DOMNode* p = new DOMNode();
+    p->nodeType = NodeType::Element; p->tagName = "p";
+    div->appendChild(p);
+
+    DOMNode* t = new DOMNode();
+    t->nodeType = NodeType::Text; t->textContent = "hi";
+    p->appendChild(t);
+
+    // Shallow clone: only the div, no children.
+    DOMNode* shallow = div->cloneNode(false);
+    CHECK(shallow->nodeType == NodeType::Element);
+    CHECK(shallow->tagName == "div");
+    CHECK(*shallow->getAttribute("id") == "box");
+    CHECK(shallow->firstChild == nullptr);
+    CHECK(shallow->ownerDocument == nullptr);  // clone is detached
+    delete shallow;
+
+    // Deep clone: full subtree, independent copy.
+    DOMNode* deep = div->cloneNode(true);
+    CHECK(deep->firstChild != nullptr);
+    DOMNode* cp = const_cast<DOMNode*>(firstElementChild(deep, "p"));
+    CHECK(cp != nullptr);
+    CHECK(textContentOf(cp) == "hi");
+    // Mutating the clone must not affect the original.
+    cp->setAttribute("class", "mutated");
+    CHECK(!p->hasAttribute("class"));
+    delete deep;
+
+    // Document deep clone carries the doctype and a fresh owning document.
+    doc.doctype = "html";
+    Document* docClone = static_cast<Document*>(doc.cloneNode(true));
+    CHECK(docClone->doctype == "html");
+    CHECK(docClone->firstChild != nullptr);
+    CHECK(docClone->firstChild->ownerDocument == docClone);
+    delete docClone;
+}
+
+static void testDoctypeCapture() {
+    HTMLParser parser;
+    Document* doc = parser.parse("<!DOCTYPE html><html><body>x</body></html>");
+    CHECK(doc->doctype == "html");
+    delete doc;
+
+    // No DOCTYPE -> empty doctype, parse still succeeds.
+    Document* doc2 = parser.parse("<html><body>y</body></html>");
+    CHECK(doc2->doctype.empty());
+    delete doc2;
+}
+
+static void testAttributeNodeType() {
+    // The Attribute node type is usable as a standalone node.
+    DOMNode* attr = new DOMNode();
+    attr->nodeType = NodeType::Attribute;
+    attr->tagName = "href";
+    attr->textContent = "https://example.com";
+    CHECK(attr->nodeType == NodeType::Attribute);
+    delete attr;
+}
+
 // ── main ───────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -256,6 +468,11 @@ int main() {
     testNamespaceSplitting();
     testFormattingAdoption();
     testSetInnerHTML();
+    testManualTreeTraversal();
+    testInsertBeforeReplaceRemove();
+    testCloneNode();
+    testDoctypeCapture();
+    testAttributeNodeType();
 
     std::cout << g_checks << " checks, " << g_failures << " failures\n";
     return g_failures == 0 ? 0 : 1;

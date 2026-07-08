@@ -247,8 +247,9 @@ private:
         }
     }
 
-    void processDoctype(const Token& /*tok*/) {
-        // DOCTYPE is ignored; we always build a standards-mode document.
+    void processDoctype(const Token& tok) {
+        // Record the DOCTYPE name (e.g. "html") on the document.
+        document_.doctype = tok.data;
     }
 
     void processComment(const Token& tok) {

@@ -181,11 +181,25 @@ inline std::vector<Token> Tokenizer::tokenize() {
                     pos_ += 2;
                     std::string comment = readCommentText();
                     tokens.push_back({TokenType::Comment, comment, {}});
-                } else {
-                    // DOCTYPE or bogus comment
-                    readBogusComment();
-                    tokens.push_back({TokenType::DOCTYPE, "", {}});
-                }
+            } else {
+                // DOCTYPE or bogus comment.
+                std::string decl = readBogusComment();
+                // "<!DOCTYPE html ...>" -> data = "html".
+                size_t i = 0;
+                auto skipWs = [&](size_t& p) {
+                    while (p < decl.size() && std::isspace(static_cast<unsigned char>(decl[p]))) ++p;
+                };
+                auto readWord = [&](size_t& p) -> std::string {
+                    size_t s = p;
+                    while (p < decl.size() && !std::isspace(static_cast<unsigned char>(decl[p]))) ++p;
+                    return decl.substr(s, p - s);
+                };
+                skipWs(i);
+                std::string first = toLower(readWord(i));
+                std::string name;
+                if (first == "doctype") { skipWs(i); name = readWord(i); }
+                tokens.push_back({TokenType::DOCTYPE, name, {}});
+            }
             } else {
                 // Start tag
                 std::string tag = readTagName();
