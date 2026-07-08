@@ -578,6 +578,189 @@ static void testDoctypeToken() {
     CHECK(tokens.back().type == TokenType::EOF_TOKEN);
 }
 
+static void testFosterParenting() {
+    HTMLParser parser;
+    Document* doc = parser.parse(
+        "<table><tr><td>A</td></tr></table><p>After table</p>");
+
+    const DOMNode* table = findElement(doc, "table");
+    CHECK(table != nullptr);
+
+    const DOMNode* body = table->parent;
+    CHECK(body != nullptr);
+    CHECK(body->nodeType == NodeType::Element);
+    CHECK(body->tagName == "body");
+
+    bool foundAfterTable = false;
+    for (const DOMNode* c = body->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == NodeType::Element && c->tagName == "p") {
+            foundAfterTable = true;
+            CHECK(textContentOf(c) == "After table");
+        }
+    }
+    CHECK(foundAfterTable);
+
+    delete doc;
+}
+
+static void testFosterParentTextInTable() {
+    HTMLParser parser;
+    Document* doc = parser.parse(
+        "<table>text<tr><td>A</td></tr></table>");
+
+    const DOMNode* table = findElement(doc, "table");
+    CHECK(table != nullptr);
+
+    const DOMNode* body = table->parent;
+    CHECK(body != nullptr);
+
+    // "text" should be foster-parented as a text node before <table> in its parent.
+    bool foundTextSibling = false;
+    for (const DOMNode* c = body->firstChild; c; c = c->nextSibling) {
+        if (c == table) break;
+        if (c->nodeType == NodeType::Text && c->textContent.find("text") != std::string::npos) {
+            foundTextSibling = true;
+        }
+    }
+    CHECK(foundTextSibling);
+
+    delete doc;
+}
+
+static void testImplicitPClose() {
+    // <p> without closing tag must be closed when a <div> starts.
+    HTMLParser parser;
+    Document* doc = parser.parse(
+        "<html><body><p>Hello<div>world</div></body></html>");
+
+    const DOMNode* body = findElement(doc, "body");
+    CHECK(body != nullptr);
+
+    const DOMNode* p = firstElementChild(body, "p");
+    CHECK(p != nullptr);
+    CHECK(textContentOf(p) == "Hello");
+
+    const DOMNode* div = firstElementChild(body, "div");
+    CHECK(div != nullptr);
+    // Verify <p> and <div> are siblings, not nested.
+    CHECK(p->nextSibling == div);
+
+    delete doc;
+
+    // Two consecutive <p> blocks: the first must be auto-closed.
+    Document* doc2 = parser.parse(
+        "<p>First<p>Second</p>");
+    const DOMNode* body2 = findElement(doc2, "body");
+    CHECK(body2 != nullptr);
+
+    std::vector<const DOMNode*> ps;
+    for (const DOMNode* c = body2->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == NodeType::Element && c->tagName == "p") ps.push_back(c);
+    }
+    CHECK(ps.size() == 2);
+    CHECK(textContentOf(ps[0]) == "First");
+    CHECK(textContentOf(ps[1]) == "Second");
+    CHECK(ps[0]->nextSibling == ps[1]);
+
+    delete doc2;
+}
+
+static void testComplexHtml() {
+    HTMLParser parser;
+    Document* doc = parser.parse(
+        "<html><head><title>Complex</title></head><body>"
+        "<h1>Title</h1>"
+        "<p>Intro</p>"
+        "<table>"
+        "  <tr><th>A</th><th>B</th></tr>"
+        "  <tr><td>1</td><td>2</td></tr>"
+        "  <tr>"
+        "    <td>"
+        "      <table><tr><td>Nested</td></tr></table>"
+        "    </td>"
+        "  </tr>"
+        "</table>"
+        "<ul>"
+        "  <li>Item 1</li>"
+        "  <li>Item 2</li>"
+        "</ul>"
+        "<form>"
+        "  <input type='text' value='x'/>"
+        "  <br/>"
+        "  <textarea>txt</textarea>"
+        "</form>"
+        "<hr/>"
+        "<p>Outro</p>"
+        "</body></html>");
+
+    CHECK(doc != nullptr);
+
+    const DOMNode* body = findElement(doc, "body");
+    CHECK(body != nullptr);
+
+    const DOMNode* h1 = firstElementChild(body, "h1");
+    CHECK(h1 != nullptr);
+    CHECK(textContentOf(h1) == "Title");
+
+    const DOMNode* p1 = firstElementChild(body, "p");
+    CHECK(p1 != nullptr);
+    CHECK(textContentOf(p1) == "Intro");
+
+    const DOMNode* outerTable = findElement(doc, "table");
+    CHECK(outerTable != nullptr);
+    const DOMNode* outerTbody = firstElementChild(outerTable, "tbody");
+    CHECK(outerTbody != nullptr);
+    CHECK(countElementChildren(outerTbody) == 3); // three rows
+
+    const DOMNode* innerTable = findElement(outerTbody, "table");
+    CHECK(innerTable != nullptr);
+    const DOMNode* innerTd = findElement(innerTable, "td");
+    CHECK(innerTd != nullptr);
+    CHECK(textContentOf(innerTd) == "Nested");
+
+    const DOMNode* ul = findElement(doc, "ul");
+    CHECK(ul != nullptr);
+    CHECK(countElementChildren(ul) == 2);
+
+    const DOMNode* form = findElement(doc, "form");
+    CHECK(form != nullptr);
+    CHECK(findElement(form, "input") != nullptr);
+
+    const DOMNode* hr = findElement(doc, "hr");
+    CHECK(hr != nullptr);
+
+    const DOMNode* p2 = nullptr;
+    for (const DOMNode* c = body->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == NodeType::Element && c->tagName == "p") p2 = c;
+    }
+    CHECK(p2 != nullptr);
+    CHECK(textContentOf(p2) == "Outro");
+
+    delete doc;
+}
+
+static void testVoidElementsInBody() {
+    HTMLParser parser;
+    Document* doc = parser.parse(
+        "<html><body><br/><img src='x.png' alt='y'/><hr/><input type='text'/></body></html>");
+
+    const DOMNode* body = findElement(doc, "body");
+    CHECK(body != nullptr);
+
+    CHECK(firstElementChild(body, "br") != nullptr);
+    CHECK(firstElementChild(body, "img") != nullptr);
+    CHECK(firstElementChild(body, "hr") != nullptr);
+    CHECK(firstElementChild(body, "input") != nullptr);
+
+    // Verify void elements are not left open on the stack.
+    const DOMNode* imgEl = firstElementChild(body, "img");
+    CHECK(imgEl != nullptr);
+    CHECK(imgEl->attributes.count("src") == 1);
+    CHECK(*imgEl->getAttribute("src") == "x.png");
+
+    delete doc;
+}
+
 
 // ── main ───────────────────────────────────────────────────────────────────────
 
@@ -600,6 +783,12 @@ int main() {
     testScriptStyleRawText();
     testMalformedHtml();
     testDoctypeToken();
+
+    testFosterParenting();
+    testFosterParentTextInTable();
+    testImplicitPClose();
+    testComplexHtml();
+    testVoidElementsInBody();
 
     std::cout << g_checks << " checks, " << g_failures << " failures\n";
     return g_failures == 0 ? 0 : 1;
