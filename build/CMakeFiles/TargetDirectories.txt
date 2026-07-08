@@ -1,0 +1,9 @@
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/NitrogenBrowser.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/DOMTest.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/test.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/edit_cache.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/rebuild_cache.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/list_install_components.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/install.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/install/local.dir
+/workspace/rigs/9202891d-89fd-4630-a477-4b5fac2d6e86/worktrees/convoy__dom-implementation-full-html5-dom-tree__8c78f6f4__gt__refinery__089f4e90/build/CMakeFiles/install/strip.dir
