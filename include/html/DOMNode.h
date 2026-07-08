@@ -26,6 +26,7 @@ enum class NodeType {
     Element,
     Text,
     Comment,
+    Attribute,   ///< standalone attribute node (name in tagName, value in textContent)
 };
 
 class DOMNode {
@@ -59,10 +60,60 @@ public:
     void setInnerHTML(const std::string& html);
 
     /// @brief Convenience: appends a new child and returns it.
+    ///        Takes ownership; if @p child already has a parent it is first
+    ///        unlinked from that parent (move semantics).
     DOMNode* appendChild(DOMNode* child);
 
-    /// @brief Removes a previously appended child.
+    /// @brief Inserts @p node immediately before @p child (which must be a child
+    ///        of this node). If @p child is null this behaves like appendChild.
+    ///        Takes ownership of @p node. Returns the inserted node.
+    DOMNode* insertBefore(DOMNode* node, DOMNode* child);
+
+    /// @brief Removes a previously appended child (and deletes it).
     void removeChild(DOMNode* child);
+
+    /// @brief Replaces @p child with @p node, deleting the old @p child.
+    ///        Takes ownership of @p node. Returns the inserted node.
+    DOMNode* replaceChild(DOMNode* node, DOMNode* child);
+
+    /// @brief Creates a copy of this node. If @p deep is true the entire subtree
+    ///        is copied recursively. The returned node is owned by the caller and
+    ///        must be deleted.
+    DOMNode* cloneNode(bool deep = false) const;
+
+    // --- attribute helpers (Element nodes) ---
+    void setAttribute(const std::string& name, const std::string& value);
+    const std::string* getAttribute(const std::string& name) const;
+    bool hasAttribute(const std::string& name) const;
+    void removeAttribute(const std::string& name);
+    bool hasAttributes() const { return !attributes.empty(); }
+    bool hasChildNodes() const { return firstChild != nullptr; }
+
+    /// @brief Unlinks @p child from this node's child list WITHOUT deleting it.
+    ///        Used internally to support move semantics for add/insert/replace.
+    void unlink(DOMNode* child);
+
+    // --- query / traversal API (Bead 4) ---
+
+    /// @brief Recursively concatenates the content of every descendant Text
+    ///        node (the DOM `textContent` accessor, minus the data member of
+    ///        the same conceptual name which is the per-node raw text).
+    std::string gatherText() const;
+
+    /// @brief Returns the first element in the subtree (depth-first) whose `id`
+    ///        attribute equals @p id, or nullptr when none matches.
+    DOMNode* getElementById(const std::string& id);
+
+    /// @brief Returns every element in the subtree (document order) whose
+    ///        tagName matches @p tag (case-insensitive). "*" matches all tags.
+    std::vector<DOMNode*> getElementsByTagName(const std::string& tag);
+
+    /// @brief Returns the first element matching @p selector, or nullptr.
+    ///        Supports tag, #id, .class, and descendant/child combinators.
+    DOMNode* querySelector(const std::string& selector);
+
+    /// @brief Returns all elements matching @p selector, in document order.
+    std::vector<DOMNode*> querySelectorAll(const std::string& selector);
 
     ~DOMNode();
 };
@@ -70,6 +121,9 @@ public:
 class Document : public DOMNode {
 public:
     Document();
+
+    /// @brief DOCTYPE name (e.g. "html"), empty when no DOCTYPE was seen.
+    std::string doctype;
 };
 
 } // namespace html

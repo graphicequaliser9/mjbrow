@@ -9,10 +9,12 @@
 #include "html/Tokenizer.h"
 #include "html/TreeBuilder.h"
 
-#include <memory>
-#include <vector>
-#include <string>
+#include <cctype>
 #include <functional>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace html {
 
@@ -93,25 +95,7 @@ void DOMNode::setInnerHTML(const std::string& html) {
     contentRoot->firstChild = contentRoot->lastChild = nullptr;
 }
 
-DOMNode* DOMNode::appendChild(DOMNode* child) {
-    if (!child) return nullptr;
-
-    child->parent = this;
-    child->prevSibling = lastChild;
-    child->nextSibling = nullptr;
-
-    if (lastChild) {
-        lastChild->nextSibling = child;
-    } else {
-        firstChild = child;
-    }
-    lastChild = child;
-    child->ownerDocument = ownerDocument;
-
-    return child;
-}
-
-void DOMNode::removeChild(DOMNode* child) {
+void DOMNode::unlink(DOMNode* child) {
     if (!child || child->parent != this) return;
 
     if (child->prevSibling) {
@@ -129,7 +113,363 @@ void DOMNode::removeChild(DOMNode* child) {
     child->parent = nullptr;
     child->prevSibling = nullptr;
     child->nextSibling = nullptr;
+}
+
+DOMNode* DOMNode::appendChild(DOMNode* child) {
+    if (!child) return nullptr;
+
+    // Move semantics: detach from any prior parent first.
+    if (child->parent) child->parent->unlink(child);
+
+    child->parent = this;
+    child->prevSibling = lastChild;
+    child->nextSibling = nullptr;
+
+    if (lastChild) {
+        lastChild->nextSibling = child;
+    } else {
+        firstChild = child;
+    }
+    lastChild = child;
+    // A Document owns itself; everything else inherits ownerDocument.
+    child->ownerDocument = (nodeType == NodeType::Document)
+        ? static_cast<Document*>(this)
+        : ownerDocument;
+
+    return child;
+}
+
+DOMNode* DOMNode::insertBefore(DOMNode* node, DOMNode* child) {
+    if (!node) return nullptr;
+
+    // Null/foreign reference child -> append at the end.
+    if (!child || child->parent != this) return appendChild(node);
+
+    // Move semantics: detach from any prior parent first.
+    if (node->parent) node->parent->unlink(node);
+
+    node->parent = this;
+    node->ownerDocument = (nodeType == NodeType::Document)
+        ? static_cast<Document*>(this)
+        : ownerDocument;
+    node->nextSibling = child;
+    node->prevSibling = child->prevSibling;
+
+    if (child->prevSibling) {
+        child->prevSibling->nextSibling = node;
+    } else {
+        firstChild = node;
+    }
+    child->prevSibling = node;
+
+    return node;
+}
+
+void DOMNode::removeChild(DOMNode* child) {
+    if (!child || child->parent != this) return;
+    unlink(child);
     delete child;
+}
+
+DOMNode* DOMNode::replaceChild(DOMNode* node, DOMNode* child) {
+    if (!node || !child || child->parent != this) return nullptr;
+    if (node == child) return node;   // replacing with itself is a no-op
+
+    // Move semantics: detach from any prior parent first.
+    if (node->parent) node->parent->unlink(node);
+
+    node->parent = this;
+    node->ownerDocument = (nodeType == NodeType::Document)
+        ? static_cast<Document*>(this)
+        : ownerDocument;
+    node->prevSibling = child->prevSibling;
+    node->nextSibling = child->nextSibling;
+
+    if (child->prevSibling) {
+        child->prevSibling->nextSibling = node;
+    } else {
+        firstChild = node;
+    }
+    if (child->nextSibling) {
+        child->nextSibling->prevSibling = node;
+    } else {
+        lastChild = node;
+    }
+
+    child->parent = nullptr;
+    child->prevSibling = nullptr;
+    child->nextSibling = nullptr;
+    delete child;
+
+    return node;
+}
+
+DOMNode* DOMNode::cloneNode(bool deep) const {
+    DOMNode* copy = (nodeType == NodeType::Document)
+        ? static_cast<DOMNode*>(new Document())
+        : new DOMNode();
+
+    copy->nodeType = nodeType;
+    copy->tagName = tagName;
+    copy->namespaceURI = namespaceURI;
+    copy->textContent = textContent;
+    copy->attributes = attributes;
+
+    if (nodeType == NodeType::Document) {
+        static_cast<Document*>(copy)->doctype =
+            static_cast<const Document*>(this)->doctype;
+    }
+
+    if (nodeType == NodeType::Document) {
+        // The clone becomes its own owner document for its subtree.
+        for (const DOMNode* c = firstChild; c; c = c->nextSibling) {
+            DOMNode* cc = c->cloneNode(true);
+            cc->parent = copy;
+            cc->ownerDocument = static_cast<Document*>(copy);
+            cc->prevSibling = copy->lastChild;
+            cc->nextSibling = nullptr;
+            if (copy->lastChild) copy->lastChild->nextSibling = cc;
+            else copy->firstChild = cc;
+            copy->lastChild = cc;
+        }
+    } else if (deep) {
+        copy->ownerDocument = ownerDocument;
+        for (const DOMNode* c = firstChild; c; c = c->nextSibling) {
+            DOMNode* cc = c->cloneNode(true);
+            cc->parent = copy;
+            cc->ownerDocument = ownerDocument;
+            cc->prevSibling = copy->lastChild;
+            cc->nextSibling = nullptr;
+            if (copy->lastChild) copy->lastChild->nextSibling = cc;
+            else copy->firstChild = cc;
+            copy->lastChild = cc;
+        }
+    }
+
+    return copy;
+}
+
+void DOMNode::setAttribute(const std::string& name, const std::string& value) {
+    attributes[name] = value;
+}
+
+const std::string* DOMNode::getAttribute(const std::string& name) const {
+    auto it = attributes.find(name);
+    return (it == attributes.end()) ? nullptr : &it->second;
+}
+
+bool DOMNode::hasAttribute(const std::string& name) const {
+    return attributes.find(name) != attributes.end();
+}
+
+void DOMNode::removeAttribute(const std::string& name) {
+    attributes.erase(name);
+}
+
+// ── query / traversal API (Bead 4) ────────────────────────────────────────────
+
+namespace {
+
+bool iequals(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i])))
+            return false;
+    }
+    return true;
+}
+
+// A compound selector: a sequence of simple selectors glued together with no
+// combinator (e.g. "div.foo#bar").
+struct Compound {
+    std::string tag;                       ///< tag name, "" or "*" for universal
+    std::string id;                        ///< #id, empty if absent
+    std::vector<std::string> classes;      ///< .class tokens
+};
+
+// A complex selector: an ordered list of compounds joined by combinators.
+struct Complex {
+    enum Combinator { Descendant, Child } comb{Descendant};
+    Compound comp;
+};
+
+// Reads a single compound selector starting at index @p i, advancing @p i past
+// it. Stops at whitespace or '>' (which are combinator separators). Returns
+// true if at least one simple selector was consumed.
+bool parseCompound(const std::string& s, size_t& i, Compound& out) {
+    out = Compound{};
+    const size_t n = s.size();
+    bool any = false;
+    while (i < n) {
+        char ch = s[i];
+        if (std::isspace(static_cast<unsigned char>(ch)) || ch == '>') break;
+        if (ch == '#') {
+            ++i;
+            std::string v;
+            while (i < n && !std::isspace(static_cast<unsigned char>(s[i])) &&
+                   s[i] != '>' && s[i] != '#' && s[i] != '.')
+                v += s[i++];
+            out.id = v;
+            any = true;
+        } else if (ch == '.') {
+            ++i;
+            std::string v;
+            while (i < n && !std::isspace(static_cast<unsigned char>(s[i])) &&
+                   s[i] != '>' && s[i] != '#' && s[i] != '.')
+                v += s[i++];
+            out.classes.push_back(v);
+            any = true;
+        } else if (ch == '*') {
+            out.tag = "*";
+            ++i;
+            any = true;
+        } else {
+            std::string v;
+            while (i < n && !std::isspace(static_cast<unsigned char>(s[i])) && s[i] != '>' &&
+                   s[i] != '#' && s[i] != '.')
+                v += s[i++];
+            out.tag = v;
+            any = true;
+        }
+    }
+    return any;
+}
+
+// Parses a (basic) CSS selector into an ordered list of compounds. The first
+// compound's combinator is always Descendant; subsequent compounds carry the
+// combinator that separates them from the previous one.
+std::vector<Complex> parseSelector(const std::string& sel) {
+    std::vector<Complex> out;
+    size_t i = 0;
+    const size_t n = sel.size();
+    while (i < n && std::isspace(static_cast<unsigned char>(sel[i]))) ++i;
+
+    Compound first;
+    if (!parseCompound(sel, i, first)) return out;
+    out.push_back(Complex{Complex::Descendant, first});
+
+    while (i < n) {
+        Complex::Combinator comb = Complex::Descendant;
+        while (i < n && std::isspace(static_cast<unsigned char>(sel[i]))) { comb = Complex::Descendant; ++i; }
+        if (i < n && sel[i] == '>') {
+            comb = Complex::Child;
+            ++i;
+            while (i < n && std::isspace(static_cast<unsigned char>(sel[i]))) ++i;
+        }
+        Compound c;
+        if (!parseCompound(sel, i, c)) break;
+        out.push_back(Complex{comb, c});
+    }
+    return out;
+}
+
+bool matchCompound(const DOMNode* node, const Compound& c) {
+    if (node->nodeType != NodeType::Element) return false;
+    if (!c.tag.empty() && c.tag != "*" && !iequals(node->tagName, c.tag)) return false;
+    if (!c.id.empty()) {
+        auto it = node->attributes.find("id");
+        if (it == node->attributes.end() || it->second != c.id) return false;
+    }
+    for (const auto& cls : c.classes) {
+        auto it = node->attributes.find("class");
+        if (it == node->attributes.end()) return false;
+        bool found = false;
+        std::istringstream ss(it->second);
+        std::string tok;
+        while (ss >> tok) {
+            if (tok == cls) { found = true; break; }
+        }
+        if (!found) return false;
+    }
+    return true;
+}
+
+// Matches a complex selector against @p subject, treating @p subject as the
+// right-most (subject) compound and walking left along ancestors.
+bool matchChain(const DOMNode* subject, const std::vector<Complex>& chain) {
+    if (chain.empty()) return false;
+    if (!matchCompound(subject, chain.back().comp)) return false;
+
+    const DOMNode* context = subject;
+    for (int k = static_cast<int>(chain.size()) - 2; k >= 0; --k) {
+        const Complex& c = chain[k];
+        bool ok = false;
+        if (c.comb == Complex::Child) {
+            const DOMNode* p = context->parent;
+            if (p && matchCompound(p, c.comp)) { ok = true; context = p; }
+        } else {  // descendant
+            for (const DOMNode* a = context->parent; a; a = a->parent) {
+                if (matchCompound(a, c.comp)) { ok = true; context = a; break; }
+            }
+        }
+        if (!ok) return false;
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+std::string DOMNode::gatherText() const {
+    if (nodeType == NodeType::Text) return textContent;
+    std::string out;
+    for (const DOMNode* c = firstChild; c; c = c->nextSibling) {
+        out += c->gatherText();
+    }
+    return out;
+}
+
+DOMNode* DOMNode::getElementById(const std::string& id) {
+    if (nodeType == NodeType::Element) {
+        auto it = attributes.find("id");
+        if (it != attributes.end() && it->second == id) return this;
+    }
+    for (DOMNode* c = firstChild; c; c = c->nextSibling) {
+        if (DOMNode* found = c->getElementById(id)) return found;
+    }
+    return nullptr;
+}
+
+std::vector<DOMNode*> DOMNode::getElementsByTagName(const std::string& tag) {
+    std::vector<DOMNode*> out;
+    bool all = (tag == "*");
+    if (nodeType == NodeType::Element && (all || iequals(tagName, tag))) {
+        out.push_back(this);
+    }
+    for (DOMNode* c = firstChild; c; c = c->nextSibling) {
+        auto child = c->getElementsByTagName(tag);
+        out.insert(out.end(), child.begin(), child.end());
+    }
+    return out;
+}
+
+DOMNode* DOMNode::querySelector(const std::string& selector) {
+    std::vector<Complex> chain = parseSelector(selector);
+    if (chain.empty()) return nullptr;
+
+    std::function<DOMNode*(DOMNode*)> walk = [&](DOMNode* n) -> DOMNode* {
+        if (!n) return nullptr;
+        if (n->nodeType == NodeType::Element && matchChain(n, chain)) return n;
+        for (DOMNode* c = n->firstChild; c; c = c->nextSibling) {
+            if (DOMNode* found = walk(c)) return found;
+        }
+        return nullptr;
+    };
+    return walk(this);
+}
+
+std::vector<DOMNode*> DOMNode::querySelectorAll(const std::string& selector) {
+    std::vector<Complex> chain = parseSelector(selector);
+    std::vector<DOMNode*> out;
+    if (chain.empty()) return out;
+
+    std::function<void(DOMNode*)> walk = [&](DOMNode* n) {
+        if (!n) return;
+        if (n->nodeType == NodeType::Element && matchChain(n, chain)) out.push_back(n);
+        for (DOMNode* c = n->firstChild; c; c = c->nextSibling) walk(c);
+    };
+    walk(this);
+    return out;
 }
 
 DOMNode::~DOMNode() {
@@ -144,6 +484,7 @@ DOMNode::~DOMNode() {
 Document::Document() {
     nodeType = NodeType::Document;
     namespaceURI = ns::HTML;
+    doctype.clear();
 }
 
 HTMLParser::HTMLParser() = default;

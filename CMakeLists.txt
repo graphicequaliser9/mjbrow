@@ -25,6 +25,8 @@ set(CROSS_PLATFORM_SOURCES
     src/main.cpp
     src/net/HttpClient.cpp
     src/html/HTMLParser.cpp
+    src/html/Tokenizer.cpp
+    src/html/TreeBuilder.cpp
     src/css/CSSParser.cpp
     src/js/VM.cpp
     src/render/Painter.cpp
@@ -73,7 +75,9 @@ enable_testing()
 
 add_executable(DOMTest
     tests/DOMTest.cpp
+    src/html/Tokenizer.cpp
     src/html/HTMLParser.cpp
+    src/html/TreeBuilder.cpp
 )
 target_include_directories(DOMTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME DOMTest COMMAND DOMTest)
