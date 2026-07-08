@@ -458,6 +458,127 @@ static void testAttributeNodeType() {
     delete attr;
 }
 
+// ── Bead 2 tokenizer tests ─────────────────────────────────────────────────────
+
+static void testBead2BasicTokenSequence() {
+    Tokenizer tok("<div class='test' id=123>Hello <!-- comment --></div>");
+    auto tokens = tok.tokenize();
+
+    CHECK(tokens.size() >= 5);
+
+    int idx = 0;
+    CHECK(tokens[idx].type == TokenType::StartTag);
+    CHECK(tokens[idx].data == "div");
+    CHECK(tokens[idx].attributes.size() == 2);
+    CHECK(tokens[idx].attributes[0].first == "class");
+    CHECK(tokens[idx].attributes[0].second == "test");
+    CHECK(tokens[idx].attributes[1].first == "id");
+    CHECK(tokens[idx].attributes[1].second == "123");
+    CHECK(!tokens[idx].selfClosing);
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::Character);
+    CHECK(tokens[idx].data == "Hello ");
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::Comment);
+    CHECK(tokens[idx].data.find("comment") != std::string::npos);
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::EndTag);
+    CHECK(tokens[idx].data == "div");
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::EOF_TOKEN);
+}
+
+static void testSelfClosingTags() {
+    Tokenizer tok("<img src='x.png' alt=desc/><br/><input type=text disabled/>");
+    auto tokens = tok.tokenize();
+
+    int idx = 0;
+    CHECK(tokens[idx].type == TokenType::StartTag);
+    CHECK(tokens[idx].data == "img");
+    CHECK(tokens[idx].selfClosing);
+    CHECK(tokens[idx].attributes.size() == 2);
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::StartTag);
+    CHECK(tokens[idx].data == "br");
+    CHECK(tokens[idx].selfClosing);
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::StartTag);
+    CHECK(tokens[idx].data == "input");
+    CHECK(tokens[idx].selfClosing);
+    CHECK(tokens[idx].attributes.size() == 2);
+
+    CHECK(tokens.back().type == TokenType::EOF_TOKEN);
+}
+
+static void testScriptStyleRawText() {
+    Tokenizer tok("<script>var x = a < b;</script><style>body { color: red; }</style>");
+    auto tokens = tok.tokenize();
+
+    int idx = 0;
+    CHECK(tokens[idx].type == TokenType::StartTag);
+    CHECK(tokens[idx].data == "script");
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::Character);
+    CHECK(tokens[idx].data == "var x = a < b;");
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::EndTag);
+    CHECK(tokens[idx].data == "script");
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::StartTag);
+    CHECK(tokens[idx].data == "style");
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::Character);
+    CHECK(tokens[idx].data == "body { color: red; }");
+
+    ++idx;
+    CHECK(tokens[idx].type == TokenType::EndTag);
+    CHECK(tokens[idx].data == "style");
+
+    CHECK(tokens.back().type == TokenType::EOF_TOKEN);
+}
+
+static void testMalformedHtml() {
+    // Missing end tags, stray closing tags, and no attributes should all work.
+    Tokenizer tok("<p>unclosed<span>data</p></p><!-- un closed comment");
+    auto tokens = tok.tokenize();
+
+    int startTags = 0;
+    int endTags = 0;
+    int comments = 0;
+    int chars = 0;
+    for (const auto& t : tokens) {
+        if (t.type == TokenType::StartTag) ++startTags;
+        else if (t.type == TokenType::EndTag) ++endTags;
+        else if (t.type == TokenType::Comment) ++comments;
+        else if (t.type == TokenType::Character) ++chars;
+    }
+    CHECK(startTags >= 2);
+    CHECK(endTags >= 1);
+    CHECK(chars > 0);
+    CHECK(comments >= 1);
+}
+
+static void testDoctypeToken() {
+    Tokenizer tok("<!doctype html><html><body>x</body></html>");
+    auto tokens = tok.tokenize();
+
+    CHECK(tokens[0].type == TokenType::DOCTYPE);
+    CHECK(tokens[0].data == "html");
+
+    CHECK(tokens.back().type == TokenType::EOF_TOKEN);
+}
+
+
 // ── main ───────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -473,6 +594,12 @@ int main() {
     testCloneNode();
     testDoctypeCapture();
     testAttributeNodeType();
+
+    testBead2BasicTokenSequence();
+    testSelfClosingTags();
+    testScriptStyleRawText();
+    testMalformedHtml();
+    testDoctypeToken();
 
     std::cout << g_checks << " checks, " << g_failures << " failures\n";
     return g_failures == 0 ? 0 : 1;

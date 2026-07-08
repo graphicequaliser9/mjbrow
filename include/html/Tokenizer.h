@@ -45,7 +45,10 @@ struct Token {
  * @brief Converts an HTML byte-string into a flat token stream.
  * @details Implements the HTML5 tokenisation algorithm for the common cases:
  *          start tags (with attribute parsing), end tags, comments, DOCTYPE,
- *          and character data, ending with a single EOF token.
+ *          and character data, ending with a single EOF token.  Raw-text
+ *          elements (script, style, title, textarea, etc.) have their content
+ *          emitted as a single character token so that embedded `<` characters
+ *          are preserved verbatim.
  */
 class Tokenizer {
 public:
@@ -74,10 +77,12 @@ private:
     void readAttributes(Token& tok);
     std::string readCommentText();
     std::string readBogusComment();
-    std::string readRawUntil(char c);     ///< read until a literal char (for DOCTYPE bogus)
+    std::string readRawUntil(char c);
+    std::string readRawTextContent(const std::string& endTagLower);
+    bool isRawTextElement(const std::string& tag) const;
 };
 
-// ── inline implementation ─────────────────────────────────────────────────────
+// ── inline helpers ─────────────────────────────────────────────────────────
 
 inline void Tokenizer::skipWhitespace() {
     while (!atEnd() && std::isspace(static_cast<unsigned char>(input_[pos_]))) ++pos_;
@@ -88,67 +93,7 @@ inline std::string Tokenizer::toLower(std::string s) const {
     return s;
 }
 
-inline std::string Tokenizer::readTagName() {
-    size_t start = pos_;
-    while (!atEnd() &&
-           !std::isspace(static_cast<unsigned char>(input_[pos_])) &&
-           input_[pos_] != '>' && input_[pos_] != '/') {
-        ++pos_;
-    }
-    return toLower(input_.substr(start, pos_ - start));
-}
-
-inline void Tokenizer::readAttributes(Token& tok) {
-    while (!atEnd()) {
-        skipWhitespace();
-        if (atEnd() || input_[pos_] == '>' || input_[pos_] == '/') break;
-
-        size_t nameStart = pos_;
-        while (!atEnd() &&
-               !std::isspace(static_cast<unsigned char>(input_[pos_])) &&
-               input_[pos_] != '=' && input_[pos_] != '>') {
-            ++pos_;
-        }
-        std::string name = toLower(input_.substr(nameStart, pos_ - nameStart));
-
-        skipWhitespace();
-        std::string value;
-        if (!atEnd() && input_[pos_] == '=') {
-            ++pos_;
-            skipWhitespace();
-            if (!atEnd() && (input_[pos_] == '"' || input_[pos_] == '\'')) {
-                char quote = input_[pos_++];
-                size_t valStart = pos_;
-                while (!atEnd() && input_[pos_] != quote) ++pos_;
-                value = input_.substr(valStart, pos_ - valStart);
-                if (!atEnd()) ++pos_;
-            } else {
-                size_t valStart = pos_;
-                while (!atEnd() &&
-                       !std::isspace(static_cast<unsigned char>(input_[pos_])) &&
-                       input_[pos_] != '>') {
-                    ++pos_;
-                }
-                value = input_.substr(valStart, pos_ - valStart);
-            }
-        }
-        tok.attributes.emplace_back(name, value);
-    }
-}
-
-inline std::string Tokenizer::readCommentText() {
-    size_t start = pos_;
-    while (pos_ + 2 < input_.size() &&
-           !(input_[pos_] == '-' && input_[pos_ + 1] == '-' && input_[pos_ + 2] == '>')) {
-        ++pos_;
-    }
-    std::string comment = input_.substr(start, pos_ - start);
-    if (pos_ + 2 < input_.size()) pos_ += 3;
-    return comment;
-}
-
-inline std::string Tokenizer::readBogusComment() {
-    // Used for <!DOCTYPE ...> and other <!...> declarations: read to '>'.
+inline std::string Tokenizer::readRawUntil(char /*c*/) {
     size_t start = pos_;
     while (!atEnd() && input_[pos_] != '>') ++pos_;
     std::string s = input_.substr(start, pos_ - start);
@@ -156,76 +101,12 @@ inline std::string Tokenizer::readBogusComment() {
     return s;
 }
 
-inline std::string Tokenizer::readRawUntil(char /*c*/) { return readBogusComment(); }
-
-inline std::vector<Token> Tokenizer::tokenize() {
-    std::vector<Token> tokens;
-
-    while (!atEnd()) {
-        if (input_[pos_] == '<') {
-            ++pos_;
-            if (atEnd()) break;
-
-            if (input_[pos_] == '/') {
-                // End tag
-                ++pos_;
-                skipWhitespace();
-                std::string tag = readTagName();
-                tokens.push_back({TokenType::EndTag, tag, {}});
-                while (!atEnd() && input_[pos_] != '>') ++pos_;
-                if (!atEnd()) ++pos_;
-            } else if (input_[pos_] == '!') {
-                ++pos_;
-                if (!atEnd() && input_[pos_] == '-' &&
-                    pos_ + 1 < input_.size() && input_[pos_ + 1] == '-') {
-                    pos_ += 2;
-                    std::string comment = readCommentText();
-                    tokens.push_back({TokenType::Comment, comment, {}});
-            } else {
-                // DOCTYPE or bogus comment.
-                std::string decl = readBogusComment();
-                // "<!DOCTYPE html ...>" -> data = "html".
-                size_t i = 0;
-                auto skipWs = [&](size_t& p) {
-                    while (p < decl.size() && std::isspace(static_cast<unsigned char>(decl[p]))) ++p;
-                };
-                auto readWord = [&](size_t& p) -> std::string {
-                    size_t s = p;
-                    while (p < decl.size() && !std::isspace(static_cast<unsigned char>(decl[p]))) ++p;
-                    return decl.substr(s, p - s);
-                };
-                skipWs(i);
-                std::string first = toLower(readWord(i));
-                std::string name;
-                if (first == "doctype") { skipWs(i); name = readWord(i); }
-                tokens.push_back({TokenType::DOCTYPE, name, {}});
-            }
-            } else {
-                // Start tag
-                std::string tag = readTagName();
-                Token tok{TokenType::StartTag, tag, {}};
-                readAttributes(tok);
-
-                if (!atEnd() && input_[pos_] == '/') {
-                    tok.selfClosing = true;
-                    ++pos_;
-                }
-                while (!atEnd() && input_[pos_] != '>') ++pos_;
-                if (!atEnd()) ++pos_;
-                tokens.push_back(tok);
-            }
-        } else {
-            // Character data
-            size_t start = pos_;
-            while (!atEnd() && input_[pos_] != '<') ++pos_;
-            if (pos_ > start) {
-                tokens.push_back({TokenType::Character, input_.substr(start, pos_ - start), {}});
-            }
-        }
-    }
-
-    tokens.push_back({TokenType::EOF_TOKEN, "", {}});
-    return tokens;
+inline bool Tokenizer::isRawTextElement(const std::string& tag) const {
+    std::string lower = toLower(tag);
+    return lower == "script" || lower == "style" || lower == "title" ||
+           lower == "textarea" || lower == "noscript" || lower == "xmp" ||
+           lower == "iframe" || lower == "noembed" || lower == "noframes" ||
+           lower == "plaintext";
 }
 
 } // namespace html
