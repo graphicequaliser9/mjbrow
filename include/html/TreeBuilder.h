@@ -17,12 +17,6 @@
 
 namespace html {
 
-namespace ns {
-constexpr const char* HTML    = "http://www.w3.org/1999/xhtml";
-constexpr const char* SVG     = "http://www.w3.org/2000/svg";
-constexpr const char* MathML  = "http://www.w3.org/1998/Math/MathML";
-}
-
 class TreeBuilder {
 public:
     explicit TreeBuilder(Document& doc);

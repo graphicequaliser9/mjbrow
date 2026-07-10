@@ -25,6 +25,7 @@ set(CROSS_PLATFORM_SOURCES
     src/main.cpp
     src/net/HttpClient.cpp
     src/html/HTMLParser.cpp
+    src/html/DOMNode.cpp
     src/html/Tokenizer.cpp
     src/html/TreeBuilder.cpp
     src/css/CSSParser.cpp
@@ -75,6 +76,7 @@ enable_testing()
 
 add_executable(DOMTest
     tests/DOMTest.cpp
+    src/html/DOMNode.cpp
     src/html/Tokenizer.cpp
     src/html/HTMLParser.cpp
     src/html/TreeBuilder.cpp
