@@ -56,6 +56,11 @@ public:
 
     // --- innerHTML interface ---
 
+    /// @brief Serialises this node and all its descendants to an HTML string.
+    ///        For Element nodes, includes the full opening/closing tags and
+    ///        escaped attributes.  Void elements have no closing tag.
+    std::string getInnerHTML() const;
+
     /// @brief Sets/replaces all children of this node by parsing an HTML string.
     void setInnerHTML(const std::string& html);
 
