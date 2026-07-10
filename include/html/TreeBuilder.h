@@ -23,6 +23,8 @@ public:
 
     void build(const std::vector<Token>& tokens);
 
+    static bool isVoidElement(const std::string& tag);
+
 private:
     enum class Mode {
         Initial,
@@ -48,7 +50,6 @@ private:
     std::string pendingText_;
 
     static const std::vector<std::string>& voidElements();
-    static bool isVoidElement(const std::string& tag);
     static bool isFormattingElement(const std::string& tag);
     static bool isBlockLevelStart(const std::string& tag);
     static std::string toLower(std::string s);

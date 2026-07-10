@@ -6,6 +6,7 @@
 
 #include "html/DOMNode.h"
 #include "html/HTMLParser.h"
+#include "html/TreeBuilder.h"
 
 #include <cctype>
 #include <functional>
@@ -17,6 +18,35 @@
 namespace html {
 
 namespace {
+
+std::string escapeText(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char ch : s) {
+        switch (ch) {
+            case '&': out += "&amp;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            default: out += ch; break;
+        }
+    }
+    return out;
+}
+
+std::string escapeAttr(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char ch : s) {
+        switch (ch) {
+            case '&': out += "&amp;"; break;
+            case '"': out += "&quot;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            default: out += ch; break;
+        }
+    }
+    return out;
+}
 
 bool iequals(const std::string& a, const std::string& b) {
     if (a.size() != b.size()) return false;
@@ -206,11 +236,15 @@ std::string DOMNode::getInnerHTML() const {
         if (c->nodeType == NodeType::Element) {
             out += "<" + c->tagName;
             for (const auto& a : c->attributes) {
-                out += " " + a.first + "=\"" + a.second + "\"";
+                out += " " + a.first + "=\"" + escapeAttr(a.second) + "\"";
             }
-            out += ">" + c->getInnerHTML() + "</" + c->tagName + ">";
+            if (TreeBuilder::isVoidElement(c->tagName)) {
+                out += ">";
+            } else {
+                out += ">" + c->getInnerHTML() + "</" + c->tagName + ">";
+            }
         } else if (c->nodeType == NodeType::Text) {
-            out += c->textContent;
+            out += escapeText(c->textContent);
         } else if (c->nodeType == NodeType::Comment) {
             out += "<!--" + c->textContent + "-->";
         }
