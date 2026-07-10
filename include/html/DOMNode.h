@@ -29,6 +29,12 @@ enum class NodeType {
     Attribute,   ///< standalone attribute node (name in tagName, value in textContent)
 };
 
+namespace ns {
+constexpr const char* HTML    = "http://www.w3.org/1999/xhtml";
+constexpr const char* SVG     = "http://www.w3.org/2000/svg";
+constexpr const char* MathML  = "http://www.w3.org/1998/Math/MathML";
+}
+
 class DOMNode {
 public:
     NodeType nodeType{NodeType::Document};
@@ -58,6 +64,9 @@ public:
 
     /// @brief Sets/replaces all children of this node by parsing an HTML string.
     void setInnerHTML(const std::string& html);
+
+    /// @brief Serialises the current children of this node to an HTML string.
+    std::string getInnerHTML() const;
 
     /// @brief Convenience: appends a new child and returns it.
     ///        Takes ownership; if @p child already has a parent it is first

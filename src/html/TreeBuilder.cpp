@@ -1,4 +1,5 @@
 #include "html/TreeBuilder.h"
+#include "html/DOMNode.h"
 
 #include <cctype>
 #include <algorithm>
