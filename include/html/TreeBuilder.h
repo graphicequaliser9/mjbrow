@@ -29,6 +29,12 @@ public:
 
     void build(const std::vector<Token>& tokens);
 
+    static const std::vector<std::string>& voidElements();
+    static bool isVoidElement(const std::string& tag);
+    static bool isFormattingElement(const std::string& tag);
+    static bool isBlockLevelStart(const std::string& tag);
+    static std::string toLower(std::string s);
+
 private:
     enum class Mode {
         Initial,
@@ -52,12 +58,6 @@ private:
     Mode mode_{Mode::Initial};
     Mode textReturnMode_{Mode::InBody};
     std::string pendingText_;
-
-    static const std::vector<std::string>& voidElements();
-    static bool isVoidElement(const std::string& tag);
-    static bool isFormattingElement(const std::string& tag);
-    static bool isBlockLevelStart(const std::string& tag);
-    static std::string toLower(std::string s);
 
     DOMNode* currentNode() const;
     DOMNode* ensureHtml();
