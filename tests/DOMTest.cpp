@@ -15,6 +15,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -242,6 +243,10 @@ static void testSetInnerHTML() {
     CHECK(countElementChildren(div) == 2);
     CHECK(firstElementChild(div, "span") != nullptr);
     CHECK(textContentOf(div) == "hithere");
+
+    std::string html = div->getInnerHTML();
+    CHECK(html.find("<span>hi</span>") != std::string::npos);
+    CHECK(html.find("<span>there</span>") != std::string::npos);
 
     // `doc` owns `div` and all of its children; let the destructor clean up.
 }
@@ -752,11 +757,44 @@ static void testVoidElementsInBody() {
     CHECK(firstElementChild(body, "hr") != nullptr);
     CHECK(firstElementChild(body, "input") != nullptr);
 
-    // Verify void elements are not left open on the stack.
     const DOMNode* imgEl = firstElementChild(body, "img");
     CHECK(imgEl != nullptr);
     CHECK(imgEl->attributes.count("src") == 1);
     CHECK(*imgEl->getAttribute("src") == "x.png");
+
+    delete doc;
+}
+
+static void testBrowtest3LargeTable() {
+    std::ifstream in(TEST_DATA_DIR "/browtest3.htm");
+    CHECK(in.is_open());
+    std::string html((std::istreambuf_iterator<char>(in)),
+                      std::istreambuf_iterator<char>());
+    in.close();
+
+    HTMLParser parser;
+    Document* doc = parser.parse(html);
+    CHECK(doc != nullptr);
+
+    const DOMNode* table = findElement(doc, "table");
+    CHECK(table != nullptr);
+
+    const DOMNode* tbody = firstElementChild(table, "tbody");
+    CHECK(tbody != nullptr);
+
+    size_t trCount = 0;
+    for (const DOMNode* c = tbody->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == NodeType::Element && c->tagName == "tr") ++trCount;
+    }
+    CHECK(trCount >= 3500);
+
+    const DOMNode* firstRow = firstElementChild(tbody, "tr");
+    CHECK(firstRow != nullptr);
+    CHECK(countElementChildren(firstRow) == 4);
+
+    const DOMNode* firstTd = firstElementChild(firstRow, "td");
+    CHECK(firstTd != nullptr);
+    CHECK(firstTd->nodeType == NodeType::Element);
 
     delete doc;
 }
@@ -931,6 +969,8 @@ int main() {
 
     testBead4NestedPageDOM();
     testBead4QueryNoMatch();
+
+    testBrowtest3LargeTable();
 
     std::cout << g_checks << " checks, " << g_failures << " failures\n";
     return g_failures == 0 ? 0 : 1;
