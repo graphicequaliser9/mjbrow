@@ -65,6 +65,9 @@ public:
     /// @brief Sets/replaces all children of this node by parsing an HTML string.
     void setInnerHTML(const std::string& html);
 
+    /// @brief Serialises the current children of this node to an HTML string.
+    std::string getInnerHTML() const;
+
     /// @brief Convenience: appends a new child and returns it.
     ///        Takes ownership; if @p child already has a parent it is first
     ///        unlinked from that parent (move semantics).

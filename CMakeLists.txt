@@ -82,4 +82,5 @@ add_executable(DOMTest
     src/html/TreeBuilder.cpp
 )
 target_include_directories(DOMTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(DOMTest PRIVATE TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests")
 add_test(NAME DOMTest COMMAND DOMTest)

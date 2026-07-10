@@ -200,6 +200,24 @@ void DOMNode::setInnerHTML(const std::string& html) {
     contentRoot->firstChild = contentRoot->lastChild = nullptr;
 }
 
+std::string DOMNode::getInnerHTML() const {
+    std::string out;
+    for (const DOMNode* c = firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == NodeType::Element) {
+            out += "<" + c->tagName;
+            for (const auto& a : c->attributes) {
+                out += " " + a.first + "=\"" + a.second + "\"";
+            }
+            out += ">" + c->getInnerHTML() + "</" + c->tagName + ">";
+        } else if (c->nodeType == NodeType::Text) {
+            out += c->textContent;
+        } else if (c->nodeType == NodeType::Comment) {
+            out += "<!--" + c->textContent + "-->";
+        }
+    }
+    return out;
+}
+
 void DOMNode::unlink(DOMNode* child) {
     if (!child || child->parent != this) return;
 
