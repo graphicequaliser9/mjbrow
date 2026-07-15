@@ -84,6 +84,14 @@ void BrowserUI::saveBookmarks() {
 }
 
 void BrowserUI::run(const std::string& initialUrl) {
+    // Seed the first tab BEFORE creating window (so renderPage has content on first paint)
+    if (!initialUrl.empty()) {
+        auto tab = std::make_unique<Tab>(initialUrl);
+        tabs_.push_back(std::move(tab));
+        activeIdx_ = 0;
+        urlBar_->setCurrentUrl(initialUrl);
+    }
+
 #ifdef _WIN32
     window_ = std::make_unique<core::Win32Window>(this);
     if (window_) {
@@ -105,14 +113,6 @@ void BrowserUI::run(const std::string& initialUrl) {
     } catch (std::system_error& e) {
         util::Log(util::LogLevel::Error,
                   std::string("BrowserUI: failed to load settings: ") + e.what() + "\n");
-    }
-
-    // Seed the first tab with the home / start URL
-    if (!initialUrl.empty()) {
-        auto tab = std::make_unique<Tab>(initialUrl);
-        tabs_.push_back(std::move(tab));
-        activeIdx_ = 0;
-        urlBar_->setCurrentUrl(initialUrl);
     }
 
     // If the message pump is owned by Win32Window, hook DevTools overlay here
