@@ -315,15 +315,21 @@ void BrowserUI::renderDevToolsOverlay() {
 
 void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
     if (auto* tab = activeTab()) {
-        // Fill with white background
         HBRUSH hbrWhite = CreateSolidBrush(RGB(255, 255, 255));
         FillRect(hdc, &rcClip, hbrWhite);
         DeleteObject(hbrWhite);
 
         html::DOMNode* doc = tab->document();
-        if (!doc) return;
+        if (!doc) {
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, RGB(128, 0, 0));
+            DrawTextA(hdc, "No DOM document (doc=null)", -1, &rcClip, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            return;
+        }
 
-        // Resolve the <html> element (fall back to the document root).
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(0, 0, 0));
+
         html::DOMNode* root = doc;
         for (html::DOMNode* c = doc->firstChild; c; c = c->nextSibling) {
             if (c->nodeType == html::NodeType::Element && c->tagName == "html") {
@@ -332,9 +338,11 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
             }
         }
 
-        // Walk the DOM tree and paint element blocks + text nodes.
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, RGB(0, 0, 0));
+        if (!root || !root->firstChild) {
+            SetTextColor(hdc, RGB(128, 0, 0));
+            DrawTextA(hdc, "DOM tree is empty", -1, &rcClip, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            return;
+        }
 
         // Local recursive renderer with a vertical pen position.
         std::function<void(html::DOMNode*, int, int&)> renderNode =

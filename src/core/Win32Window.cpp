@@ -125,6 +125,7 @@ int Win32Window::run() {
 
         if (hwnd_ && ui_) {
             ui_->onFrame(16.0);
+            InvalidateRect(static_cast<HWND>(hwnd_), nullptr, FALSE);
         }
 
         Sleep(16);
