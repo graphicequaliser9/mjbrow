@@ -65,6 +65,15 @@ static std::string wideToAnsi(const std::wstring& wstr) {
     return result;
 }
 
+static std::wstring to_wstring_utf8(const std::string& s) {
+    if (s.empty()) return {};
+    int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+    if (len == 0) return {};
+    std::wstring w(len - 1, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &w[0], len);
+    return w;
+}
+
 static std::vector<std::string> splitLines(const std::string& str) {
     std::vector<std::string> lines;
     size_t start = 0;
@@ -109,8 +118,10 @@ HttpResponse HttpClient::fetchWinHTTP(const ParsedUrl& parsed, const std::string
     DWORD timeoutMs = 10000;
     WinHttpSetTimeouts(hSession, timeoutMs, timeoutMs, timeoutMs, timeoutMs);
 
+    std::wstring wHost = to_wstring_utf8(parsed.host);
+
     hConnect = WinHttpConnect(hSession,
-                              parsed.host.c_str(),
+                              wHost.c_str(),
                               static_cast<INTERNET_PORT>(parsed.port),
                               0);
     if (!hConnect) {
@@ -119,9 +130,11 @@ HttpResponse HttpClient::fetchWinHTTP(const ParsedUrl& parsed, const std::string
     }
 
     DWORD flags = (parsed.scheme == "https") ? WINHTTP_FLAG_SECURE : 0;
+    std::wstring wMethod = to_wstring_utf8(method);
+    std::wstring wPath = to_wstring_utf8(parsed.path);
     hRequest = WinHttpOpenRequest(hConnect,
-                                  method.c_str(),
-                                  parsed.path.c_str(),
+                                  wMethod.c_str(),
+                                  wPath.c_str(),
                                   nullptr,
                                   WINHTTP_NO_REFERER,
                                   WINHTTP_DEFAULT_ACCEPT_TYPES,
@@ -222,8 +235,12 @@ HttpResponse HttpClient::fetchWinInet(const ParsedUrl& parsed, const std::string
     InternetSetOptionW(hSession, INTERNET_OPTION_RECEIVE_TIMEOUT,
                        (LPVOID)&timeoutMs, sizeof(timeoutMs));
 
+    std::wstring wHost = to_wstring_utf8(parsed.host);
+    std::wstring wPath = to_wstring_utf8(parsed.path);
+    std::wstring wMethod = to_wstring_utf8(method);
+
     HINTERNET hConnect = InternetConnectW(hSession,
-                                          parsed.host.c_str(),
+                                          wHost.c_str(),
                                           static_cast<INTERNET_PORT>(parsed.port),
                                           nullptr,
                                           nullptr,
@@ -239,8 +256,8 @@ HttpResponse HttpClient::fetchWinInet(const ParsedUrl& parsed, const std::string
     flags |= INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE;
 
     HINTERNET hRequest = HttpOpenRequestW(hConnect,
-                                          method.c_str(),
-                                          parsed.path.c_str(),
+                                          wMethod.c_str(),
+                                          wPath.c_str(),
                                           nullptr,
                                           WINHTTP_NO_REFERER,
                                           WINHTTP_DEFAULT_ACCEPT_TYPES,
