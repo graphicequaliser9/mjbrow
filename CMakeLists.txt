@@ -29,6 +29,7 @@ set(CROSS_PLATFORM_SOURCES
     src/html/TreeBuilder.cpp
     src/css/CSSParser.cpp
     src/js/VM.cpp
+    src/js/QuickJS.cpp
     src/render/Painter.cpp
     src/layout/Box.cpp
     src/util/String.cpp
@@ -81,3 +82,23 @@ add_executable(DOMTest
 )
 target_include_directories(DOMTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME DOMTest COMMAND DOMTest)
+
+# ── JS runtime integration test (Bead B) ──────────────────────────────────────
+# Exercises the QuickJS embedding + DOM bindings: a page with an inline <script>
+# that mutates document.body.innerHTML must update the rendered DOM tree.
+add_executable(JSTest
+    tests/JSTest.cpp
+    src/js/QuickJS.cpp
+    src/js/VM.cpp
+    src/browser/Tab.cpp
+    src/html/Tokenizer.cpp
+    src/html/HTMLParser.cpp
+    src/html/TreeBuilder.cpp
+    src/css/CSSParser.cpp
+    src/net/HttpClient.cpp
+    src/util/String.cpp
+    src/util/Memory.cpp
+    src/util/Logging.cpp
+)
+target_include_directories(JSTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME JSTest COMMAND JSTest)

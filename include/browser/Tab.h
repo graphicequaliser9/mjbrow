@@ -20,6 +20,7 @@
 // Forward declarations – we include the real headers only in Tab.cpp.
 namespace html { class DOMNode; }
 namespace js   { class VM; }
+namespace quickjs { struct JSRuntime; struct JSContext; struct JSObject; }
 namespace css  { class CSSParser; class ComputedStyle; }
 
 namespace browser {
@@ -172,12 +173,48 @@ private:
     std::string rawHtml_;                  ///< Last-fetched raw source
     std::string bodyText_;                   ///< Extracted body text for rendering
     std::unique_ptr<html::Document> document_; ///< Owned parsed document
-    std::unique_ptr<js::VM> vm_;            ///< Per-tab JS engine
+    std::unique_ptr<js::VM> vm_;            ///< Per-tab JS engine (legacy stub retained)
     WebView  webView_;                     ///< Viewport + scroll state
     bool     loading_{true};               ///< True until first paint completes
     double   paintUs_{0.0};                ///< Last paint duration (us)
     double   layoutUs_{0.0};               ///< Last layout duration (us)
-    double   jsUs_{0.0};                   ///< Last JS VM duration (us)
+    double   jsUs_{0.0};                    ///< Last JS VM duration (us)
+
+    // ── QuickJS embedding (Bead B) ───────────────────────────────────────────
+    quickjs::JSRuntime* rt_{nullptr};      ///< Owned JS runtime
+    quickjs::JSContext* js_{nullptr};      ///< Per-tab JS context
+
+    /**
+     * @brief Initialises the QuickJS runtime + context for this tab and injects
+     *        the browser JS globals (document, requestAnimationFrame, timers, etc.).
+     */
+    void initJS();
+
+    /**
+     * @brief Runs every <script> element found in the loaded DOM.
+     */
+    void runScripts();
+
+    /**
+     * @brief Executes a single JS source string, logging any exception.
+     */
+    void evalScript(const std::string& code);
+
+    /**
+     * @brief Builds the JS `document` object backed by this tab's DOM tree.
+     */
+    void bindDOM();
+
+    /**
+     * @brief Wraps a native DOMNode as a JS object with the DOM accessor surface.
+     */
+    static quickjs::JSObject* wrapNode(html::DOMNode* node);
+
+    /**
+     * @brief Advances the JS runtime by one frame: runs microtasks/pending jobs
+     *        and fires requestAnimationFrame callbacks.
+     */
+    void runJSEventLoop();
 };
 
 } // namespace browser

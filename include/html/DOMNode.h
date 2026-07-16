@@ -126,6 +126,12 @@ public:
     std::string doctype;
 };
 
+/**
+ * @brief Serialises a node (and its subtree) back to an HTML source string.
+ *        Used by the JS `element.innerHTML` getter to reconstruct markup.
+ */
+std::string serializeNode(const DOMNode* node);
+
 } // namespace html
 
 #endif // HTML_DOMNODE_H

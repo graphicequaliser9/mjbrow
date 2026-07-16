@@ -124,7 +124,13 @@ int Win32Window::run() {
         }
 
         if (hwnd_ && ui_) {
+            // Advance one frame.  BrowserUI::onFrame() ticks the active tab,
+            // which drives the JS runtime: it runs the microtask/pending-job
+            // queue (JS_ExecutePendingJobs) and fires requestAnimationFrame
+            // callbacks.  Script-driven DOM mutations happen here, so we request
+            // a repaint afterwards to reflect them on screen.
             ui_->onFrame(16.0);
+            InvalidateRect(hwnd_, nullptr, FALSE);
         }
 
         Sleep(16);

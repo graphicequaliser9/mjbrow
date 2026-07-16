@@ -7,17 +7,19 @@
  */
 
 #include "net/HttpClient.h"
-#include <windows.h>
-#include <winhttp.h>
-#include <wininet.h>
 #include <string>
 #include <cstdint>
 #include <algorithm>
 #include <cstring>
 #include "util/Logging.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <winhttp.h>
+#include <wininet.h>
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "wininet.lib")
+#endif
 
 namespace net {
 
@@ -56,7 +58,8 @@ bool HttpClient::parseUrl(const std::string& url, ParsedUrl& out) {
     return true;
 }
 
-static std::string wideToAnsi(const std::wstring& wstr) {
+#ifdef _WIN32
+ static std::string wideToAnsi(const std::wstring& wstr) {
     if (wstr.empty()) return {};
     int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
     if (size <= 0) return {};
@@ -73,6 +76,7 @@ static std::wstring to_wstring_utf8(const std::string& s) {
     MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &w[0], len);
     return w;
 }
+#endif
 
 static std::vector<std::string> splitLines(const std::string& str) {
     std::vector<std::string> lines;
@@ -103,6 +107,7 @@ static void parseRawHeaders(const std::string& rawHeaders, std::map<std::string,
     }
 }
 
+#ifdef _WIN32
 HttpResponse HttpClient::fetchWinHTTP(const ParsedUrl& parsed, const std::string& method) {
     HttpResponse response;
     HINTERNET hSession = nullptr;
@@ -318,6 +323,7 @@ HttpResponse HttpClient::fetchWinInet(const ParsedUrl& parsed, const std::string
 
     return response;
 }
+#endif // _WIN32
 
 HttpResponse HttpClient::sendRequest(const std::string& url, const std::string& method) {
     ParsedUrl parsed;
@@ -326,6 +332,7 @@ HttpResponse HttpClient::sendRequest(const std::string& url, const std::string& 
         return HttpResponse{};
     }
 
+#ifdef _WIN32
     HttpResponse response = fetchWinHTTP(parsed, method);
     if (response.status == 0 || response.body.empty()) {
         util::Log(util::LogLevel::Info, "HttpClient: WinHTTP failed or returned empty, trying WinInet fallback\n");
@@ -339,6 +346,15 @@ HttpResponse HttpClient::sendRequest(const std::string& url, const std::string& 
     }
 
     return response;
+#else
+    // Cross-platform / headless stub: network fetches are only implemented on
+    // Windows (WinHTTP/WinInet).  Non-Windows builds return an empty response so
+    // the browser can still load pages via Tab::loadHTML for testing.
+    (void)method;
+    util::Log(util::LogLevel::Warn,
+              "HttpClient: network disabled on this platform, no body for " + url + "\n");
+    return HttpResponse{};
+#endif
 }
 
 } // namespace net
