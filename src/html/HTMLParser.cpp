@@ -55,7 +55,10 @@ void DOMNode::setInnerHTML(const std::string& html) {
     // fragment is implicitly wrapped in <html>/<body> by the tree builder).
     Document temp;
     HTMLParser parser;
-    parser.parseInto(temp, html);
+    // Wrap the fragment in a <body> so the tree builder enters InBody mode and
+    // preserves bare text (e.g. innerHTML = "hello") which would otherwise be
+    // dropped while still in the Initial/BeforeHtml state.
+    parser.parseInto(temp, "<body>" + html + "</body>");
 
     // Find the content root: prefer the <body> element (which may be nested
     // under <html>), otherwise fall back to the document root.
@@ -489,5 +492,85 @@ Document::Document() {
 
 HTMLParser::HTMLParser() = default;
 HTMLParser::~HTMLParser() = default;
+
+namespace {
+
+std::string escapeText(const std::string& s) {
+    std::string out;
+    for (char ch : s) {
+        switch (ch) {
+        case '&': out += "&amp;"; break;
+        case '<': out += "&lt;"; break;
+        case '>': out += "&gt;"; break;
+        default: out += ch; break;
+        }
+    }
+    return out;
+}
+
+std::string escapeAttr(const std::string& s) {
+    std::string out;
+    for (char ch : s) {
+        switch (ch) {
+        case '&': out += "&amp;"; break;
+        case '<': out += "&lt;"; break;
+        case '>': out += "&gt;"; break;
+        case '"': out += "&quot;"; break;
+        default: out += ch; break;
+        }
+    }
+    return out;
+}
+
+void serializeRec(const DOMNode* node, std::string& out) {
+    if (!node) return;
+    switch (node->nodeType) {
+    case NodeType::Text:
+        out += escapeText(node->textContent);
+        break;
+    case NodeType::Comment:
+        out += "<!--" + node->textContent + "-->";
+        break;
+    case NodeType::Element: {
+        if (node->tagName == "br") { out += "<br>"; break; }
+        if (node->tagName == "img" || node->tagName == "hr" ||
+            node->tagName == "input" || node->tagName == "meta" ||
+            node->tagName == "link") {
+            out += "<" + node->tagName;
+            for (auto& kv : node->attributes)
+                out += " " + kv.first + "=\"" + escapeAttr(kv.second) + "\"";
+            out += ">";
+            break;
+        }
+        out += "<" + node->tagName;
+        for (auto& kv : node->attributes)
+            out += " " + kv.first + "=\"" + escapeAttr(kv.second) + "\"";
+        out += ">";
+        for (DOMNode* c = node->firstChild; c; c = c->nextSibling)
+            serializeRec(c, out);
+        out += "</" + node->tagName + ">";
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+} // anonymous namespace
+
+std::string serializeNode(const DOMNode* node) {
+    std::string out;
+    if (!node) return out;
+    if (node->nodeType == NodeType::Document) {
+        if (auto* doc = static_cast<const Document*>(node)) {
+            if (!doc->doctype.empty()) out += "<!DOCTYPE " + doc->doctype + ">";
+        }
+        for (DOMNode* c = node->firstChild; c; c = c->nextSibling)
+            serializeRec(c, out);
+        return out;
+    }
+    serializeRec(node, out);
+    return out;
+}
 
 } // namespace html

@@ -12,6 +12,7 @@
 #include "html/DOMNode.h"
 #include "net/HttpClient.h"
 #include "js/VM.h"
+#include "js/QuickJS.h"
 #include "css/CSSParser.h"
 #include "util/Logging.h"
 #include "util/String.h"
@@ -21,13 +22,19 @@
 
 namespace browser {
 
-Tab::Tab() = default;
+Tab::Tab() {
+    initJS();
+}
 
 Tab::Tab(const std::string& initialUrl) {
+    initJS();
     if (!initialUrl.empty()) navigate(initialUrl);
 }
 
-Tab::~Tab() = default;
+Tab::~Tab() {
+    if (js_) quickjs::JS_FreeContext(js_);
+    if (rt_) quickjs::JS_FreeRuntime(rt_);
+}
 
 static std::string extractTextContent(html::DOMNode* node) {
     std::string result;
@@ -75,6 +82,7 @@ void Tab::navigate(const std::string& url) {
 
     cascadeStyles();
     performLayout();
+    runScripts();
     loading_ = false;
 }
 
@@ -101,17 +109,16 @@ void Tab::loadHTML(const std::string& html) {
 
     cascadeStyles();
     performLayout();
+    runScripts();
     loading_ = false;
 }
 
 void Tab::tick(double dtMs) {
+    (void)dtMs;
     if (loading_ || !document_) return;
 
-    // JS VM tick (requestAnimationFrame injection point in a full engine)
-    if (vm_) {
-        (void)dtMs;
-        vm_->execute("");
-    }
+    // Drive the JS runtime: run microtasks/pending jobs and fire RAF callbacks.
+    runJSEventLoop();
 
     paintFrame();
 }
@@ -135,6 +142,8 @@ std::string Tab::title() const {
 void Tab::clear() {
     document_.reset();
     vm_.reset();
+    if (js_) { quickjs::JS_FreeContext(js_); js_ = nullptr; }
+    if (rt_) { quickjs::JS_FreeRuntime(rt_); rt_ = nullptr; }
     url_.clear();
     rawHtml_.clear();
     loading_ = true;
@@ -162,6 +171,293 @@ html::DOMNode* Tab::querySelector(const std::string& selector) {
 std::vector<html::DOMNode*> Tab::querySelectorAll(const std::string& selector) {
     if (!document_) return {};
     return document_->querySelectorAll(selector);
+}
+
+// ── JS engine integration (Bead B) ───────────────────────────────────────
+
+void Tab::initJS() {
+    if (rt_ && js_) return;
+    rt_ = quickjs::JS_NewRuntime();
+    js_ = quickjs::JS_NewContext(rt_);
+    quickjs::JS_SetOpaque(js_, this);
+    bindDOM();
+}
+
+void Tab::bindDOM() {
+    if (!js_) return;
+
+    // document.getElementById(id) → wrapped element
+    auto* docObj = quickjs::JS_NewObject("Document");
+    docObj->native = document_.get();
+
+    docObj->getter = [this](const std::string& key) -> quickjs::JSValue {
+        if (key == "body" && document_) {
+            html::DOMNode* body = nullptr;
+            for (html::DOMNode* c = document_->firstChild; c; c = c->nextSibling) {
+                if (c->nodeType == html::NodeType::Element && c->tagName == "html") {
+                    for (html::DOMNode* h = c->firstChild; h; h = h->nextSibling) {
+                        if (h->nodeType == html::NodeType::Element && h->tagName == "body") {
+                            body = h; break;
+                        }
+                    }
+                    break;
+                }
+            }
+            if (body) return quickjs::JSValue::object(wrapNode(body));
+        }
+        if (key == "documentElement" && document_) {
+            for (html::DOMNode* c = document_->firstChild; c; c = c->nextSibling) {
+                if (c->nodeType == html::NodeType::Element && c->tagName == "html")
+                    return quickjs::JSValue::object(wrapNode(c));
+            }
+        }
+        return quickjs::JSValue::undefined();
+    };
+
+    // document.getElementById
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (!document_ || args.empty()) return quickjs::JSValue::null();
+            std::string id = args[0].type == quickjs::JSValueType::String ? args[0].str
+                                                                         : quickjs::jsToString(args[0]);
+            html::DOMNode* node = document_->getElementById(id);
+            return node ? quickjs::JSValue::object(wrapNode(node))
+                        : quickjs::JSValue::null();
+        };
+        docObj->props["getElementById"] = quickjs::JSValue::object(fn);
+    }
+    // document.createElement
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            html::DOMNode* node = new html::DOMNode();
+            node->nodeType = html::NodeType::Element;
+            node->tagName = args.empty() ? "" : (args[0].type == quickjs::JSValueType::String
+                                                    ? args[0].str : quickjs::jsToString(args[0]));
+            node->ownerDocument = document_.get();
+            return quickjs::JSValue::object(wrapNode(node));
+        };
+        docObj->props["createElement"] = quickjs::JSValue::object(fn);
+    }
+    // document.querySelector
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (!document_ || args.empty()) return quickjs::JSValue::null();
+            std::string sel = args[0].type == quickjs::JSValueType::String ? args[0].str
+                                                                          : quickjs::jsToString(args[0]);
+            html::DOMNode* node = document_->querySelector(sel);
+            return node ? quickjs::JSValue::object(wrapNode(node))
+                        : quickjs::JSValue::null();
+        };
+        docObj->props["querySelector"] = quickjs::JSValue::object(fn);
+    }
+
+    quickjs::JS_SetGlobal(js_, "document", quickjs::JSValue::object(docObj));
+
+    // requestAnimationFrame(cb)
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (args.empty()) return quickjs::JSValue::undefined();
+            return quickjs::JSValue::number(
+                quickjs::JS_RequestAnimationFrame(js_, args[0]));
+        };
+        quickjs::JS_SetGlobal(js_, "requestAnimationFrame", quickjs::JSValue::object(fn));
+    }
+    // setTimeout(cb, delay)
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (args.empty()) return quickjs::JSValue::undefined();
+            double delay = args.size() > 1 ? quickjs::jsToNumber(args[1]) : 0.0;
+            return quickjs::JSValue::number(quickjs::JS_SetTimeout(js_, args[0], delay));
+        };
+        quickjs::JS_SetGlobal(js_, "setTimeout", quickjs::JSValue::object(fn));
+    }
+    // setInterval(cb, delay)
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (args.empty()) return quickjs::JSValue::undefined();
+            double delay = args.size() > 1 ? quickjs::jsToNumber(args[1]) : 16.0;
+            return quickjs::JSValue::number(quickjs::JS_SetInterval(js_, args[0], delay));
+        };
+        quickjs::JS_SetGlobal(js_, "setInterval", quickjs::JSValue::object(fn));
+    }
+    // clearTimeout / clearInterval
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (!args.empty()) quickjs::JS_ClearTimeout(js_, quickjs::jsToNumber(args[0]));
+            return quickjs::JSValue::undefined();
+        };
+        quickjs::JS_SetGlobal(js_, "clearTimeout", quickjs::JSValue::object(fn));
+        auto* fn2 = quickjs::JS_NewObject("Function");
+        fn2->call = [this](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (!args.empty()) quickjs::JS_ClearInterval(js_, quickjs::jsToNumber(args[0]));
+            return quickjs::JSValue::undefined();
+        };
+        quickjs::JS_SetGlobal(js_, "clearInterval", quickjs::JSValue::object(fn2));
+    }
+    // console.log
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            std::string out;
+            for (size_t i = 0; i < args.size(); ++i) {
+                if (i) out += " ";
+                out += quickjs::jsToString(args[i]);
+            }
+            util::Log(util::LogLevel::Info, "[JS] " + out + "\n");
+            return quickjs::JSValue::undefined();
+        };
+        auto* console = quickjs::JS_NewObject("Object");
+        console->props["log"] = quickjs::JSValue::object(fn);
+        quickjs::JS_SetGlobal(js_, "console", quickjs::JSValue::object(console));
+    }
+}
+
+quickjs::JSObject* Tab::wrapNode(html::DOMNode* node) {
+    auto* obj = quickjs::JS_NewObject(node ? node->tagName : "Node");
+    obj->native = node;
+
+    // .innerHTML getter/setter
+    obj->getter = [node](const std::string& key) -> quickjs::JSValue {
+        if (!node) return quickjs::JSValue::undefined();
+        if (key == "innerHTML") {
+            std::string out;
+            for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
+                out += html::serializeNode(c);
+            }
+            return quickjs::JSValue::string(out);
+        }
+        if (key == "textContent") {
+            std::string out;
+            for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
+                out += c->gatherText();
+            }
+            return quickjs::JSValue::string(out);
+        }
+        if (key == "tagName") return quickjs::JSValue::string(node->tagName);
+        if (key == "id") {
+            auto* v = node->getAttribute("id");
+            return v ? quickjs::JSValue::string(*v) : quickjs::JSValue::string("");
+        }
+        if (key == "children" || key == "childNodes") {
+            auto* arr = quickjs::JS_NewObject("Array");
+            size_t idx = 0;
+            for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling, ++idx) {
+                arr->props[std::to_string(idx)] = quickjs::JSValue::object(wrapNode(c));
+            }
+            arr->props["length"] = quickjs::JSValue::number(static_cast<double>(idx));
+            return quickjs::JSValue::object(arr);
+        }
+        if (key == "style") {
+            auto* style = quickjs::JS_NewObject("CSSStyleDeclaration");
+            style->setter = [node](const std::string& p, const quickjs::JSValue& v) {
+                if (!node) return;
+                node->attributes["style"] = (node->attributes.count("style")
+                    ? node->attributes["style"] + ";" : "")
+                    + p + ":" + quickjs::jsToString(v);
+            };
+            return quickjs::JSValue::object(style);
+        }
+        if (key == "appendChild" || key == "setAttribute" || key == "getElementById") {
+            // handled via props below
+        }
+        // attribute access (getAttribute)
+        auto* v = node->getAttribute(key);
+        if (v) return quickjs::JSValue::string(*v);
+        return quickjs::JSValue::undefined();
+    };
+    obj->setter = [node](const std::string& key, const quickjs::JSValue& v) {
+        if (!node) return;
+        if (key == "innerHTML") {
+            node->setInnerHTML(quickjs::jsToString(v));
+        } else if (key == "textContent") {
+            node->setInnerHTML("");
+            html::DOMNode* t = new html::DOMNode();
+            t->nodeType = html::NodeType::Text;
+            t->textContent = quickjs::jsToString(v);
+            node->appendChild(t);
+        } else if (key == "id") {
+            node->setAttribute("id", quickjs::jsToString(v));
+        } else {
+            node->setAttribute(key, quickjs::jsToString(v));
+        }
+    };
+
+    // .appendChild(child)
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [node](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (!node || args.empty() || args[0].type != quickjs::JSValueType::Object
+                || !args[0].obj || !args[0].obj->native)
+                return quickjs::JSValue::undefined();
+            html::DOMNode* child = static_cast<html::DOMNode*>(args[0].obj->native);
+            if (child->ownerDocument == nullptr && node->ownerDocument)
+                child->ownerDocument = node->ownerDocument;
+            node->appendChild(child);
+            return args[0];
+        };
+        obj->props["appendChild"] = quickjs::JSValue::object(fn);
+    }
+    // .setAttribute(name, value)
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [node](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (!node || args.size() < 2) return quickjs::JSValue::undefined();
+            node->setAttribute(quickjs::jsToString(args[0]), quickjs::jsToString(args[1]));
+            return quickjs::JSValue::undefined();
+        };
+        obj->props["setAttribute"] = quickjs::JSValue::object(fn);
+    }
+    // .getElementById
+    {
+        auto* fn = quickjs::JS_NewObject("Function");
+        fn->call = [node](const std::vector<quickjs::JSValue>& args) -> quickjs::JSValue {
+            if (!node || args.empty()) return quickjs::JSValue::null();
+            std::string id = args[0].type == quickjs::JSValueType::String ? args[0].str
+                                                                         : quickjs::jsToString(args[0]);
+            html::DOMNode* found = node->getElementById(id);
+            return found ? quickjs::JSValue::object(wrapNode(found))
+                         : quickjs::JSValue::null();
+        };
+        obj->props["getElementById"] = quickjs::JSValue::object(fn);
+    }
+    return obj;
+}
+
+void Tab::evalScript(const std::string& code) {
+    if (!js_ || code.empty()) return;
+    quickjs::JS_Eval(js_, code, "inline");
+    if (js_->exception) {
+        util::Log(util::LogLevel::Error, "[JS] " + js_->error + "\n");
+        js_->exception = false;
+    }
+}
+
+void Tab::runScripts() {
+    if (!js_ || !document_) return;
+    // Re-bind document to the freshly parsed tree.
+    bindDOM();
+    // Walk the tree for <script> elements and execute their text content.
+    std::vector<html::DOMNode*> scripts = document_->getElementsByTagName("script");
+    for (html::DOMNode* script : scripts) {
+        std::string code;
+        for (html::DOMNode* c = script->firstChild; c; c = c->nextSibling) {
+            if (c->nodeType == html::NodeType::Text) code += c->textContent;
+        }
+        if (!code.empty()) evalScript(code);
+    }
+}
+
+void Tab::runJSEventLoop() {
+    if (!js_ || !rt_) return;
+    quickjs::JS_ExecutePendingJobs(js_);
+    quickjs::JS_DispatchAnimationFrame(js_, 0.0);
 }
 
 // ── private helpers ──────────────────────────────────────────────────────
