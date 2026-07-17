@@ -468,8 +468,49 @@ void Tab::parseHTML(const std::string& html) {
 }
 
 void Tab::cascadeStyles() {
-    // Stub
-    (void)document_;
+    if (!document_) return;
+
+    document_->stylesheets.clear();
+
+    css::CSSParser parser;
+    std::vector<html::DOMNode*> styleElements = document_->getElementsByTagName("style");
+    for (html::DOMNode* styleEl : styleElements) {
+        std::string cssText;
+        for (html::DOMNode* c = styleEl->firstChild; c; c = c->nextSibling) {
+            if (c->nodeType == html::NodeType::Text) {
+                cssText += c->textContent;
+            }
+        }
+        if (!cssText.empty()) {
+            auto rules = parser.parse(cssText);
+            document_->stylesheets.insert(
+                document_->stylesheets.end(), rules.begin(), rules.end());
+        }
+    }
+
+    for (html::DOMNode* c = document_->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == html::NodeType::Element && c->tagName == "html") {
+            for (html::DOMNode* h = c->firstChild; h; h = h->nextSibling) {
+                if (h->nodeType == html::NodeType::Element && h->tagName == "head") {
+                    for (html::DOMNode* s = h->firstChild; s; s = s->nextSibling) {
+                        if (s->nodeType == html::NodeType::Element && s->tagName == "style") {
+                            std::string cssText;
+                            for (html::DOMNode* t = s->firstChild; t; t = t->nextSibling) {
+                                if (t->nodeType == html::NodeType::Text) {
+                                    cssText += t->textContent;
+                                }
+                            }
+                            if (!cssText.empty()) {
+                                auto rules = parser.parse(cssText);
+                                document_->stylesheets.insert(
+                                    document_->stylesheets.end(), rules.begin(), rules.end());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 void Tab::performLayout() {

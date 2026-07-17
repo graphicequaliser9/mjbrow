@@ -12,6 +12,7 @@
 #include "devtools/PaintProfiler.h"
 #include "core/Win32Window.h"
 #include "html/DOMNode.h"
+#include "css/Cascade.h"
 #include "util/Logging.h"
 
 #include <algorithm>
@@ -344,25 +345,53 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
             return;
         }
 
-        // Local recursive renderer with a vertical pen position.
-        std::function<void(html::DOMNode*, int, int&)> renderNode =
-            [&](html::DOMNode* node, int indent, int& y) {
+        std::function<void(html::DOMNode*, const css::ComputedStyle*, int, int, int, int&)> renderNode =
+            [&](html::DOMNode* node, const css::ComputedStyle* parentStyle, int indent, int padLeft, int padRight, int& y) {
                 if (!node) return;
-                const int left = rcClip.left + 12 + indent * 16;
-                const int right = rcClip.right - 12;
+                const int left = rcClip.left + 12 + indent * 16 + padLeft;
+                const int right = rcClip.right - 12 - padRight;
 
                 if (node->nodeType == html::NodeType::Text) {
                     std::string text = node->textContent;
-                    // Skip pure whitespace-only text nodes.
                     bool onlyWs = true;
                     for (char ch : text) if (!std::isspace(static_cast<unsigned char>(ch))) { onlyWs = false; break; }
                     if (onlyWs) return;
+
+                    const css::ComputedStyle* style = parentStyle ? parentStyle : &css::ComputedStyle{};
+                    int weight = style->fontWeight;
+                    if (weight < 400) weight = 400;
+                    if (weight > 900) weight = 900;
+                    HFONT hFont = CreateFontA(
+                        -static_cast<int>(style->fontSize),
+                        0, 0, 0, weight,
+                        FALSE, FALSE, FALSE,
+                        DEFAULT_CHARSET,
+                        OUT_DEFAULT_PRECIS,
+                        CLIP_DEFAULT_PRECIS,
+                        DEFAULT_QUALITY,
+                        DEFAULT_PITCH | FF_DONTCARE,
+                        style->fontFamily.c_str()
+                    );
+                    HFONT hOld = static_cast<HFONT>(SelectObject(hdc, hFont));
+                    SetTextColor(hdc, RGB(
+                        (style->color >> 16) & 0xFF,
+                        (style->color >> 8) & 0xFF,
+                        style->color & 0xFF
+                    ));
                     RECT rc{left, y, right, rcClip.bottom};
-                    DrawTextA(hdc, text.c_str(), -1, &rc, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_CALCRECT);
-                    DrawTextA(hdc, text.c_str(), -1, &rc, DT_LEFT | DT_TOP | DT_WORDBREAK);
+                    UINT flags = DT_TOP | DT_WORDBREAK | DT_CALCRECT;
+                    if (style->textAlign == css::ComputedStyle::AlignCenter) flags |= DT_CENTER;
+                    else if (style->textAlign == css::ComputedStyle::AlignRight) flags |= DT_RIGHT;
+                    else flags |= DT_LEFT;
+                    DrawTextA(hdc, text.c_str(), -1, &rc, flags);
+                    DrawTextA(hdc, text.c_str(), -1, &rc, flags & ~DT_CALCRECT);
+                    SelectObject(hdc, hOld);
+                    DeleteObject(hFont);
                     y = rc.bottom + 2;
                 } else if (node->nodeType == html::NodeType::Element) {
-                    // Block-level elements get a light rectangle outline.
+                    css::ComputedStyle style = css::Cascade::computeStyle(node, doc);
+                    if (style.display == css::ComputedStyle::None) return;
+
                     static const std::vector<std::string> blocks = {
                         "html","head","body","div","p","section","article","header","footer",
                         "ul","ol","li","table","thead","tbody","tfoot","tr","td","th","blockquote"
@@ -372,37 +401,70 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
 
                     if (isBlock) {
                         int startY = y;
-                        // Recurse into children first (this draws their text and
-                        // advances the pen position).
+                        y += static_cast<int>(style.marginTop);
+                        int childPadLeft = padLeft + static_cast<int>(style.paddingLeft);
+                        int childPadRight = padRight + static_cast<int>(style.paddingRight);
                         int childIndent = (node->tagName == "td" || node->tagName == "th") ? 0 : 1;
                         for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
-                            renderNode(c, childIndent, y);
+                            renderNode(c, &style, indent + childIndent, childPadLeft, childPadRight, y);
                         }
-                        // Draw a light border rectangle around the block so the
-                        // element's box is visible without covering its content.
-                        RECT boxRc{left, startY, right, y};
+                        RECT boxRc{left, startY, right, y + static_cast<int>(style.paddingBottom)};
                         if (boxRc.bottom > boxRc.top) {
-                            HBRUSH hbrBox = CreateSolidBrush(RGB(150, 175, 200));
-                            FrameRect(hdc, &boxRc, hbrBox);
-                            DeleteObject(hbrBox);
+                            if (style.backgroundColor != 0x00000000) {
+                                HBRUSH hbrBg = CreateSolidBrush(RGB(
+                                    (style.backgroundColor >> 16) & 0xFF,
+                                    (style.backgroundColor >> 8) & 0xFF,
+                                    style.backgroundColor & 0xFF
+                                ));
+                                FillRect(hdc, &boxRc, hbrBg);
+                                DeleteObject(hbrBg);
+                            }
+                            if (style.borderTop > 0 || style.borderRight > 0 ||
+                                style.borderBottom > 0 || style.borderLeft > 0) {
+                                HBRUSH hbrBorder = CreateSolidBrush(RGB(
+                                    (style.borderColor >> 16) & 0xFF,
+                                    (style.borderColor >> 8) & 0xFF,
+                                    style.borderColor & 0xFF
+                                ));
+                                if (style.borderTop > 0) {
+                                    RECT topRc{boxRc.left, boxRc.top, boxRc.right, boxRc.top + static_cast<int>(style.borderTop)};
+                                    FillRect(hdc, &topRc, hbrBorder);
+                                }
+                                if (style.borderRight > 0) {
+                                    RECT rightRc{boxRc.right - static_cast<int>(style.borderRight), boxRc.top, boxRc.right, boxRc.bottom};
+                                    FillRect(hdc, &rightRc, hbrBorder);
+                                }
+                                if (style.borderBottom > 0) {
+                                    RECT bottomRc{boxRc.left, boxRc.bottom - static_cast<int>(style.borderBottom), boxRc.right, boxRc.bottom};
+                                    FillRect(hdc, &bottomRc, hbrBorder);
+                                }
+                                if (style.borderLeft > 0) {
+                                    RECT leftRc{boxRc.left, boxRc.top, boxRc.left + static_cast<int>(style.borderLeft), boxRc.bottom};
+                                    FillRect(hdc, &leftRc, hbrBorder);
+                                }
+                                DeleteObject(hbrBorder);
+                            } else {
+                                HBRUSH hbrBox = CreateSolidBrush(RGB(150, 175, 200));
+                                FrameRect(hdc, &boxRc, hbrBox);
+                                DeleteObject(hbrBox);
+                            }
                         }
-                        y += 4;
+                        y += static_cast<int>(style.marginBottom) + 4;
                     } else {
-                        // Inline element: just render its children inline.
                         for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
-                            renderNode(c, 0, y);
+                            renderNode(c, &style, 0, padLeft, padRight, y);
                         }
                     }
                 } else {
-                    // Document / Comment: recurse into children.
+                    css::ComputedStyle style = css::Cascade::computeStyle(node, doc);
                     for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
-                        renderNode(c, indent, y);
+                        renderNode(c, &style, indent, padLeft, padRight, y);
                     }
                 }
             };
 
         int y = rcClip.top + 12;
-        renderNode(root, 0, y);
+        renderNode(root, nullptr, 0, 0, 0, y);
     }
 }
 
