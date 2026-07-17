@@ -357,7 +357,8 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
                     for (char ch : text) if (!std::isspace(static_cast<unsigned char>(ch))) { onlyWs = false; break; }
                     if (onlyWs) return;
 
-                    const css::ComputedStyle* style = parentStyle ? parentStyle : &css::ComputedStyle{};
+                    css::ComputedStyle defaultStyle;
+                    const css::ComputedStyle* style = parentStyle ? parentStyle : &defaultStyle;
                     int weight = style->fontWeight;
                     if (weight < 400) weight = 400;
                     if (weight > 900) weight = 900;
