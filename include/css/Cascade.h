@@ -83,6 +83,17 @@ public:
     computeStyle(const html::DOMNode* element, const std::vector<CSSRule>& rules);
 
     /**
+     * @brief Computes a fully-populated ComputedStyle for @p element using the
+     *        stylesheet rules stored on @p doc.
+     * @param element The DOM element to compute styles for.
+     * @param doc     The owning document (provides the stylesheet rules).
+     * @return A ComputedStyle struct with all properties resolved to defaults
+     *         or to the cascaded values.
+     */
+    static ComputedStyle
+    computeStyle(const html::DOMNode* element, const html::Document* doc);
+
+    /**
      * @brief Computes specificity for a single selector string (no combinator
      *        expansion / no element).  Useful for testing and for callers that
      *        need to rank selectors directly.

@@ -130,3 +130,24 @@ add_executable(CascadeTest
 )
 target_include_directories(CascadeTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME CascadeTest COMMAND CascadeTest)
+
+# ── Style render unit test (Bead C) ────────────────────────────────────────────
+# Verifies ComputedStyle values from inline styles, stylesheet rules, and the
+# Tab cascade pipeline for the acceptance case.
+add_executable(StyleRenderTest
+    tests/StyleRenderTest.cpp
+    src/css/CSSParser.cpp
+    src/css/Cascade.cpp
+    src/browser/Tab.cpp
+    src/html/HTMLParser.cpp
+    src/html/Tokenizer.cpp
+    src/html/TreeBuilder.cpp
+    src/js/QuickJS.cpp
+    src/js/VM.cpp
+    src/net/HttpClient.cpp
+    src/util/String.cpp
+    src/util/Memory.cpp
+    src/util/Logging.cpp
+)
+target_include_directories(StyleRenderTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME StyleRenderTest COMMAND StyleRenderTest)

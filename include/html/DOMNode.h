@@ -16,6 +16,9 @@
 #include <string>
 #include <vector>
 
+#include "css/ComputedStyle.h"
+#include "css/CSSParser.h"
+
 // Forward declaration used by ComputedStyle (css/ headers included separately)
 namespace css { class ComputedStyle; }
 
@@ -121,6 +124,9 @@ public:
 class Document : public DOMNode {
 public:
     Document();
+
+    /// @brief Parsed author stylesheet rules (<style> blocks + inline stylesheet refs).
+    std::vector<css::CSSRule> stylesheets;
 
     /// @brief DOCTYPE name (e.g. "html"), empty when no DOCTYPE was seen.
     std::string doctype;

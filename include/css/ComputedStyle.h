@@ -39,17 +39,19 @@ struct ComputedStyle {
     float borderTop{0.0f},   borderRight{0.0f}, borderBottom{0.0f}, borderLeft{0.0f};
     float paddingTop{0.0f},  paddingRight{0.0f}, paddingBottom{0.0f}, paddingLeft{0.0f};
 
+    // --- colour / background ---
+    uint32_t color{0xFF000000};          ///< ARGB
+    uint32_t backgroundColor{0x00000000};///< ARGB (transparent)
+    uint32_t borderColor{0xFF000000};    ///< ARGB
+    float    opacity{1.0f};
+
     // --- typography ---
     float  fontSize{16.0f};
     std::string fontFamily{"Arial"};
     int    fontWeight{400};
     float  lineHeight{1.2f};
     float  letterSpacing{0.0f};
-
-    // --- colour / background ---
-    uint32_t color{0xFF000000};          ///< ARGB
-    uint32_t backgroundColor{0x00000000};///< ARGB (transparent)
-    float    opacity{1.0f};
+    enum TextAlign { AlignLeft, AlignCenter, AlignRight } textAlign{AlignLeft};
 
     // --- box-sizing ---
     enum BoxSizing { ContentBox, BorderBox } boxSizing{ContentBox};
