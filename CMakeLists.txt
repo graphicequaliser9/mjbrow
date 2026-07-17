@@ -102,3 +102,14 @@ add_executable(JSTest
 )
 target_include_directories(JSTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME JSTest COMMAND JSTest)
+
+# ── CSS parser unit test (Bead A) ─────────────────────────────────────────────
+# Exercises the tokenizer, rule-set parser (type / class / id / descendant /
+# child selectors), declaration parsing, at-rules (@media, @font-face) and
+# inline style="" attribute parsing.
+add_executable(CSSTest
+    tests/CSSTest.cpp
+    src/css/CSSParser.cpp
+)
+target_include_directories(CSSTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME CSSTest COMMAND CSSTest)
