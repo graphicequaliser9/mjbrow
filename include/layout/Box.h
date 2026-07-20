@@ -1,12 +1,20 @@
 /**
- * @file Layout.h
- * @brief Layout engine scaffolding.
- * @details This module provides the layout engine interface.
+ * @file Box.h
+ * @brief CSS layout engine entry point and box generation.
+ * @details Walks a DOM subtree, generates layout boxes for rendered nodes,
+ *          then delegates to the block / inline layout passes.  Returns a
+ *          positioned LayoutNode tree.
  * @copyright 2026, Nitrogen Browser Project
  */
 
 #ifndef LAYOUT_BOX_H
 #define LAYOUT_BOX_H
+
+#include <memory>
+#include <vector>
+
+#include "html/DOMNode.h"
+#include "layout/LayoutNode.h"
 
 namespace layout {
 
@@ -15,12 +23,16 @@ public:
     Box();
     ~Box();
 
-    /// @brief Layout engine entry point.
-    /// @param root The root DOM node.
-    void layout(class DOMNode* root);
+    std::vector<std::unique_ptr<LayoutNode>> layout(html::DOMNode* root);
 
 private:
-    // Placeholder for internal state
+    std::unique_ptr<LayoutNode> buildBox(html::DOMNode* node, float containingWidth, float containingHeight);
+    void assignComputedStyles(html::DOMNode* node);
+    void layoutBlock(LayoutNode* box, float containingWidth, float containingHeight);
+    void layoutInline(LayoutNode* box, float containingWidth, float containingHeight);
+    float measureTextWidth(const std::string& text, float fontSize, const std::string& fontFamily);
+    float measureTextHeight(float fontSize, const std::string& fontFamily);
+    void collapseMargins(float& topMargin, float& bottomMargin, const LayoutNode* parent);
 };
 
 } // namespace layout

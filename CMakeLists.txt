@@ -33,6 +33,9 @@ set(CROSS_PLATFORM_SOURCES
     src/js/QuickJS.cpp
     src/render/Painter.cpp
     src/layout/Box.cpp
+    src/layout/TextMeasurer.cpp
+    src/layout/BlockLayout.cpp
+    src/layout/InlineLayout.cpp
     src/util/String.cpp
     src/util/Memory.cpp
     src/util/Logging.cpp
@@ -96,6 +99,11 @@ add_executable(JSTest
     src/html/HTMLParser.cpp
     src/html/TreeBuilder.cpp
     src/css/CSSParser.cpp
+    src/css/Cascade.cpp
+    src/layout/Box.cpp
+    src/layout/BlockLayout.cpp
+    src/layout/InlineLayout.cpp
+    src/layout/TextMeasurer.cpp
     src/net/HttpClient.cpp
     src/util/String.cpp
     src/util/Memory.cpp
@@ -138,6 +146,10 @@ add_executable(StyleRenderTest
     tests/StyleRenderTest.cpp
     src/css/CSSParser.cpp
     src/css/Cascade.cpp
+    src/layout/Box.cpp
+    src/layout/BlockLayout.cpp
+    src/layout/InlineLayout.cpp
+    src/layout/TextMeasurer.cpp
     src/browser/Tab.cpp
     src/html/HTMLParser.cpp
     src/html/Tokenizer.cpp
@@ -151,3 +163,28 @@ add_executable(StyleRenderTest
 )
 target_include_directories(StyleRenderTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME StyleRenderTest COMMAND StyleRenderTest)
+
+# ── Layout engine unit test (Bead A) ────────────────────────────────────────────
+# Verifies that the layout engine produces a positioned LayoutNode tree from
+# a DOM subtree with block and inline elements.
+add_executable(LayoutTest
+    tests/LayoutTest.cpp
+    src/layout/Box.cpp
+    src/layout/BlockLayout.cpp
+    src/layout/InlineLayout.cpp
+    src/layout/TextMeasurer.cpp
+    src/html/HTMLParser.cpp
+    src/html/Tokenizer.cpp
+    src/html/TreeBuilder.cpp
+    src/css/Cascade.cpp
+    src/css/CSSParser.cpp
+    src/browser/Tab.cpp
+    src/js/QuickJS.cpp
+    src/js/VM.cpp
+    src/net/HttpClient.cpp
+    src/util/String.cpp
+    src/util/Memory.cpp
+    src/util/Logging.cpp
+)
+target_include_directories(LayoutTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME LayoutTest COMMAND LayoutTest)
