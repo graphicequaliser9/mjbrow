@@ -42,7 +42,11 @@
 #include "render/Painter.h"
 
 // --- layout ---
+#include "layout/LayoutNode.h"
 #include "layout/Box.h"
+#include "layout/TextMeasurer.h"
+#include "layout/BlockLayout.h"
+#include "layout/InlineLayout.h"
 
 // --- devtools ---
 #include "devtools/DOMInspector.h"

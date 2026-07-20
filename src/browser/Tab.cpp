@@ -14,6 +14,9 @@
 #include "js/VM.h"
 #include "js/QuickJS.h"
 #include "css/CSSParser.h"
+#include "css/Cascade.h"
+#include "layout/Box.h"
+#include "layout/TextMeasurer.h"
 #include "util/Logging.h"
 #include "util/String.h"
 
@@ -511,11 +514,25 @@ void Tab::cascadeStyles() {
             }
         }
     }
+
+    for (html::DOMNode* c = document_->firstChild; c; c = c->nextSibling) {
+        if (c->nodeType == html::NodeType::Element) {
+            css::ComputedStyle style = css::Cascade::computeStyle(c, document_.get());
+            c->style = new css::ComputedStyle(style);
+            for (html::DOMNode* desc = c->firstChild; desc; desc = desc->nextSibling) {
+                if (desc->nodeType == html::NodeType::Element) {
+                    css::ComputedStyle dstyle = css::Cascade::computeStyle(desc, document_.get());
+                    desc->style = new css::ComputedStyle(dstyle);
+                }
+            }
+        }
+    }
 }
 
 void Tab::performLayout() {
-    // Stub
-    (void)document_;
+    if (!document_) return;
+    layout::Box engine;
+    layoutTree_ = std::make_unique<std::vector<std::unique_ptr<layout::LayoutNode>>>(engine.layout(document_.get()));
 }
 
 void Tab::paintFrame() {

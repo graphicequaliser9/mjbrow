@@ -16,8 +16,9 @@
 #include <vector>
 
 #include "html/DOMNode.h"
+#include "layout/LayoutNode.h"
 
-// Forward declarations – we include the real headers only in Tab.cpp.
+// Forward declarations
 namespace html { class DOMNode; }
 namespace js   { class VM; }
 namespace quickjs { struct JSRuntime; struct JSContext; struct JSObject; }
@@ -84,6 +85,11 @@ void goBack()    { /* TODO: history */ navigate(url_); }
      */
     WebView* webView() { return &webView_; }
     const WebView* webView() const { return &webView_; }
+
+    /**
+     * @brief Returns the positioned layout tree produced by the last layout pass.
+     */
+    const std::vector<std::unique_ptr<layout::LayoutNode>>* layoutTree() const { return layoutTree_.get(); }
 
     /**
      * @brief Returns the root DOM node (or nullptr if no document loaded).
@@ -174,6 +180,7 @@ private:
     std::string bodyText_;                   ///< Extracted body text for rendering
     std::unique_ptr<html::Document> document_; ///< Owned parsed document
     std::unique_ptr<js::VM> vm_;            ///< Per-tab JS engine (legacy stub retained)
+    std::unique_ptr<std::vector<std::unique_ptr<layout::LayoutNode>>> layoutTree_; ///< Last layout pass result
     WebView  webView_;                     ///< Viewport + scroll state
     bool     loading_{true};               ///< True until first paint completes
     double   paintUs_{0.0};                ///< Last paint duration (us)
