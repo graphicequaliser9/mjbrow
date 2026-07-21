@@ -2,7 +2,8 @@
  * @file Box.cpp
  * @brief CSS layout engine implementation.
  * @details Walks the DOM, generates a LayoutNode tree, runs block/inline
- *          layout passes, and returns positioned geometry.
+ *          layout passes, and returns positioned geometry.  Table elements
+ *          are delegated to TableLayout which materialises only visible rows.
  * @copyright 2026, Nitrogen Browser Project
  */
 
@@ -10,6 +11,7 @@
 
 #include "layout/BlockLayout.h"
 #include "layout/InlineLayout.h"
+#include "layout/TableLayout.h"
 #include "layout/TextMeasurer.h"
 
 #include "html/DOMNode.h"
@@ -39,21 +41,24 @@ void Box::assignComputedStyles(html::DOMNode* node) {
     }
 }
 
-std::vector<std::unique_ptr<LayoutNode>> Box::layout(html::DOMNode* root) {
+std::vector<std::unique_ptr<LayoutNode>> Box::layout(html::DOMNode* root,
+                                                      float viewportWidth,
+                                                      float viewportHeight,
+                                                      float scrollY) {
     std::vector<std::unique_ptr<LayoutNode>> result;
     if (!root) return result;
 
     assignComputedStyles(root);
 
-    float viewportWidth = 800.0f;
-    float viewportHeight = 600.0f;
+    float viewportTop = scrollY;
+    float viewportBottom = scrollY + viewportHeight;
 
     if (root->nodeType == html::NodeType::Document) {
         for (html::DOMNode* child = root->firstChild; child; child = child->nextSibling) {
             if (child->nodeType == html::NodeType::Element && child->tagName == "html") {
                 for (html::DOMNode* htmlChild = child->firstChild; htmlChild; htmlChild = htmlChild->nextSibling) {
                     if (htmlChild->nodeType == html::NodeType::Element && htmlChild->tagName == "body") {
-                        auto bodyBox = buildBox(htmlChild, viewportWidth, viewportHeight);
+                        auto bodyBox = buildBox(htmlChild, viewportWidth, viewportHeight, viewportTop, viewportBottom);
                         if (bodyBox) {
                             result.push_back(std::move(bodyBox));
                         }
@@ -62,14 +67,18 @@ std::vector<std::unique_ptr<LayoutNode>> Box::layout(html::DOMNode* root) {
             }
         }
     } else {
-        auto top = buildBox(root, viewportWidth, viewportHeight);
+        auto top = buildBox(root, viewportWidth, viewportHeight, viewportTop, viewportBottom);
         if (top) result.push_back(std::move(top));
     }
 
     return result;
 }
 
-std::unique_ptr<LayoutNode> Box::buildBox(html::DOMNode* node, float containingWidth, float containingHeight) {
+std::unique_ptr<LayoutNode> Box::buildBox(html::DOMNode* node,
+                                          float containingWidth,
+                                          float containingHeight,
+                                          float viewportTop,
+                                          float viewportBottom) {
     if (!node) return nullptr;
 
     css::ComputedStyle* style = node->style;
@@ -114,13 +123,12 @@ std::unique_ptr<LayoutNode> Box::buildBox(html::DOMNode* node, float containingW
     if (box->width < 0.0f) box->width = 0.0f;
 
     if (style->display == css::ComputedStyle::Inline || style->display == css::ComputedStyle::InlineBlock) {
-        TextMeasurer measurer;
         std::string text;
         for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
             if (c->nodeType == html::NodeType::Text) text += c->textContent;
         }
         if (!text.empty()) {
-            auto metrics = measurer.measure(text, style->fontSize, style->fontFamily);
+            auto metrics = measurer_.measure(text, style->fontSize, style->fontFamily);
             if (box->width < metrics.width) {
                 box->width = metrics.width + borderLeft + borderRight + paddingLeft + paddingRight;
             }
@@ -130,31 +138,40 @@ std::unique_ptr<LayoutNode> Box::buildBox(html::DOMNode* node, float containingW
         }
     }
 
-    for (html::DOMNode* child = node->firstChild; child; child = child->nextSibling) {
-        if (child->nodeType == html::NodeType::Text) {
-            if (!child->textContent.empty()) {
-                auto textBox = std::make_unique<LayoutNode>();
-                textBox->domNode = child;
-                textBox->display = css::ComputedStyle::Inline;
-                textBox->position = css::ComputedStyle::Static;
-                box->children.push_back(std::move(textBox));
-            }
-        } else if (child->nodeType == html::NodeType::Element) {
-            auto childBox = buildBox(child, box->contentWidth(), containingHeight);
-            if (childBox) {
-                box->children.push_back(std::move(childBox));
+    if (style->display == css::ComputedStyle::Table) {
+        TableLayout tableLayout(measurer_);
+        auto geo = tableLayout.computeGeometry(node, box->contentWidth());
+        box->height = geo.totalHeight;
+        auto visibleRows = tableLayout.materializeVisibleRows(node, geo, viewportTop, viewportBottom, box->contentWidth(), 0.0f);
+        for (auto& row : visibleRows) {
+            box->children.push_back(std::move(row));
+        }
+    } else {
+        for (html::DOMNode* child = node->firstChild; child; child = child->nextSibling) {
+            if (child->nodeType == html::NodeType::Text) {
+                if (!child->textContent.empty()) {
+                    auto textBox = std::make_unique<LayoutNode>();
+                    textBox->domNode = child;
+                    textBox->display = css::ComputedStyle::Inline;
+                    textBox->position = css::ComputedStyle::Static;
+                    box->children.push_back(std::move(textBox));
+                }
+            } else if (child->nodeType == html::NodeType::Element) {
+                auto childBox = buildBox(child, box->contentWidth(), containingHeight, viewportTop, viewportBottom);
+                if (childBox) {
+                    box->children.push_back(std::move(childBox));
+                }
             }
         }
-    }
 
-    if (style->display == css::ComputedStyle::Block || style->display == css::ComputedStyle::Table) {
-        BlockLayout blockLayout;
-        blockLayout.layout(box.get(), box->contentWidth(), containingHeight);
-    } else if (style->display == css::ComputedStyle::Inline || style->display == css::ComputedStyle::InlineBlock) {
-        if (!box->children.empty()) {
-            TextMeasurer measurer;
-            InlineLayout inlineLayout(measurer);
-            inlineLayout.layout(box.get(), box->contentWidth(), containingHeight);
+        if (style->display == css::ComputedStyle::Block || style->display == css::ComputedStyle::TableRow) {
+            BlockLayout blockLayout;
+            blockLayout.layout(box.get(), box->contentWidth(), containingHeight);
+        } else if (style->display == css::ComputedStyle::Inline || style->display == css::ComputedStyle::InlineBlock) {
+            if (!box->children.empty()) {
+                InlineLayout inlineLayout(measurer_);
+                inlineLayout.layout(box.get(), box->contentWidth(), containingHeight);
+            }
         }
     }
 
@@ -162,15 +179,11 @@ std::unique_ptr<LayoutNode> Box::buildBox(html::DOMNode* node, float containingW
 }
 
 float Box::measureTextWidth(const std::string& text, float fontSize, const std::string& fontFamily) {
-    TextMeasurer measurer;
-    auto metrics = measurer.measure(text, fontSize, fontFamily);
-    return metrics.width;
+    return measurer_.measure(text, fontSize, fontFamily).width;
 }
 
 float Box::measureTextHeight(float fontSize, const std::string& fontFamily) {
-    TextMeasurer measurer;
-    auto metrics = measurer.measure("", fontSize, fontFamily);
-    return metrics.height;
+    return measurer_.measure("", fontSize, fontFamily).height;
 }
 
 void Box::collapseMargins(float& topMargin, float& bottomMargin, const LayoutNode* parent) {
@@ -181,4 +194,3 @@ void Box::collapseMargins(float& topMargin, float& bottomMargin, const LayoutNod
 }
 
 } // namespace layout
-

@@ -33,6 +33,7 @@ set(CROSS_PLATFORM_SOURCES
     src/js/QuickJS.cpp
     src/render/Painter.cpp
     src/layout/Box.cpp
+    src/layout/TableLayout.cpp
     src/layout/TextMeasurer.cpp
     src/layout/BlockLayout.cpp
     src/layout/InlineLayout.cpp
@@ -101,6 +102,7 @@ add_executable(JSTest
     src/css/CSSParser.cpp
     src/css/Cascade.cpp
     src/layout/Box.cpp
+    src/layout/TableLayout.cpp
     src/layout/BlockLayout.cpp
     src/layout/InlineLayout.cpp
     src/layout/TextMeasurer.cpp
@@ -147,6 +149,7 @@ add_executable(StyleRenderTest
     src/css/CSSParser.cpp
     src/css/Cascade.cpp
     src/layout/Box.cpp
+    src/layout/TableLayout.cpp
     src/layout/BlockLayout.cpp
     src/layout/InlineLayout.cpp
     src/layout/TextMeasurer.cpp
@@ -170,6 +173,7 @@ add_test(NAME StyleRenderTest COMMAND StyleRenderTest)
 add_executable(LayoutTest
     tests/LayoutTest.cpp
     src/layout/Box.cpp
+    src/layout/TableLayout.cpp
     src/layout/BlockLayout.cpp
     src/layout/InlineLayout.cpp
     src/layout/TextMeasurer.cpp
@@ -188,3 +192,28 @@ add_executable(LayoutTest
 )
 target_include_directories(LayoutTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME LayoutTest COMMAND LayoutTest)
+
+# ── Table layout unit test (Bead B) ─────────────────────────────────────────────
+# Verifies column sizing, cell spanning, and virtual scroll materialization.
+add_executable(TableLayoutTest
+    tests/TableLayoutTest.cpp
+    src/layout/TableLayout.cpp
+    src/layout/Box.cpp
+    src/layout/BlockLayout.cpp
+    src/layout/InlineLayout.cpp
+    src/layout/TextMeasurer.cpp
+    src/browser/Tab.cpp
+    src/html/HTMLParser.cpp
+    src/html/Tokenizer.cpp
+    src/html/TreeBuilder.cpp
+    src/css/CSSParser.cpp
+    src/css/Cascade.cpp
+    src/js/QuickJS.cpp
+    src/js/VM.cpp
+    src/net/HttpClient.cpp
+    src/util/String.cpp
+    src/util/Memory.cpp
+    src/util/Logging.cpp
+)
+target_include_directories(TableLayoutTest PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME TableLayoutTest COMMAND TableLayoutTest)
