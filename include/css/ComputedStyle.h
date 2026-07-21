@@ -22,10 +22,12 @@ namespace css {
  */
 struct ComputedStyle {
     // --- display / box model ---
-    enum Display { None, Block, Inline, InlineBlock, Flex, Grid, Table, TableRow, TableCell } display{Block};
+    enum Display { None, Block, Inline, InlineBlock, Flex, Grid, Table, TableRow, TableCell, TableCaption, TableColGroup, TableCol, TableRowGroup } display{Block};
 
     enum Position { Static, Relative, Absolute, Fixed, Sticky } position{Static};
     enum Float   { FNone, Left, Right } float_{FNone};
+
+    enum TableLayout { AutoTable, FixedTable } tableLayout{AutoTable};
 
     float width{0.0f};
     float height{0.0f};

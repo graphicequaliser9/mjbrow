@@ -532,7 +532,10 @@ void Tab::cascadeStyles() {
 void Tab::performLayout() {
     if (!document_) return;
     layout::Box engine;
-    layoutTree_ = std::make_unique<std::vector<std::unique_ptr<layout::LayoutNode>>>(engine.layout(document_.get()));
+    float vw = static_cast<float>(webView_.width);
+    float vh = static_cast<float>(webView_.height);
+    float sy = static_cast<float>(webView_.scrollY);
+    layoutTree_ = std::make_unique<std::vector<std::unique_ptr<layout::LayoutNode>>>(engine.layout(document_.get(), vw, vh, sy));
 }
 
 void Tab::paintFrame() {
