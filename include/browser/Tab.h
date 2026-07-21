@@ -160,6 +160,11 @@ private:
     void cascadeStyles();
 
     /**
+     * @brief Recursively applies the CSS cascade to a DOM subtree.
+     */
+    void applyCascade(html::DOMNode* node);
+
+    /**
      * @brief Runs the layout engine and populates layout boxes.
      */
     void performLayout();

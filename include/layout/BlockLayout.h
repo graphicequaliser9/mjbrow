@@ -14,6 +14,8 @@ public:
     }
 };
 
+float verticalMargin(const LayoutNode* node);
+
 } // namespace layout
 
 #endif
