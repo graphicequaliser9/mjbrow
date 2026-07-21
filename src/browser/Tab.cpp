@@ -14,6 +14,7 @@
 #include "js/VM.h"
 #include "js/QuickJS.h"
 #include "css/CSSParser.h"
+#include "css/Cascade.h"
 #include "util/Logging.h"
 #include "util/String.h"
 
@@ -488,28 +489,22 @@ void Tab::cascadeStyles() {
         }
     }
 
-    for (html::DOMNode* c = document_->firstChild; c; c = c->nextSibling) {
-        if (c->nodeType == html::NodeType::Element && c->tagName == "html") {
-            for (html::DOMNode* h = c->firstChild; h; h = h->nextSibling) {
-                if (h->nodeType == html::NodeType::Element && h->tagName == "head") {
-                    for (html::DOMNode* s = h->firstChild; s; s = s->nextSibling) {
-                        if (s->nodeType == html::NodeType::Element && s->tagName == "style") {
-                            std::string cssText;
-                            for (html::DOMNode* t = s->firstChild; t; t = t->nextSibling) {
-                                if (t->nodeType == html::NodeType::Text) {
-                                    cssText += t->textContent;
-                                }
-                            }
-                            if (!cssText.empty()) {
-                                auto rules = parser.parse(cssText);
-                                document_->stylesheets.insert(
-                                    document_->stylesheets.end(), rules.begin(), rules.end());
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    for (html::DOMNode* node = document_->firstChild; node; node = node->nextSibling) {
+        applyCascade(node);
+    }
+}
+
+void Tab::applyCascade(html::DOMNode* node) {
+    if (!node) return;
+
+    if (node->nodeType == html::NodeType::Element) {
+        delete node->style;
+        css::ComputedStyle computed = css::Cascade::computeStyle(node, document_.get());
+        node->style = new css::ComputedStyle(computed);
+    }
+
+    for (html::DOMNode* child = node->firstChild; child; child = child->nextSibling) {
+        applyCascade(child);
     }
 }
 

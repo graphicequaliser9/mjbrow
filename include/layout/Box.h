@@ -15,12 +15,9 @@ public:
     Box();
     ~Box();
 
-    /// @brief Layout engine entry point.
-    /// @param root The root DOM node.
     void layout(class DOMNode* root);
 
 private:
-    // Placeholder for internal state
 };
 
 } // namespace layout

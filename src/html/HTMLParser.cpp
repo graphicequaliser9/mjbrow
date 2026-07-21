@@ -482,6 +482,7 @@ DOMNode::~DOMNode() {
         firstChild = next;
     }
     firstChild = lastChild = nullptr;
+    delete style;
 }
 
 Document::Document() {

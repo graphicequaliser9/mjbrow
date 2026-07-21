@@ -33,6 +33,8 @@ set(CROSS_PLATFORM_SOURCES
     src/js/QuickJS.cpp
     src/render/Painter.cpp
     src/layout/Box.cpp
+    src/layout/BlockLayout.cpp
+    src/layout/TableLayout.cpp
     src/util/String.cpp
     src/util/Memory.cpp
     src/util/Logging.cpp
