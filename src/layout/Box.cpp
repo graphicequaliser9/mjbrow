@@ -24,9 +24,6 @@ static LayoutNode* buildLayout(html::DOMNode* domNode, LayoutNode* parent, int x
     layoutNode->x = x;
     layoutNode->y = y;
     layoutNode->width = width;
-    if (parent) {
-        layoutNode->parent = parent;
-    }
 
     if (domNode->nodeType == html::NodeType::Element) {
         if (domNode->tagName == "head") {
@@ -46,18 +43,28 @@ static LayoutNode* buildLayout(html::DOMNode* domNode, LayoutNode* parent, int x
         }
 
         for (html::DOMNode* child = domNode->firstChild; child; child = child->nextSibling) {
+            LayoutNode* childLayout = nullptr;
             if (child->nodeType == html::NodeType::Element) {
-                LayoutNode* childLayout = buildLayout(child, layoutNode, childX, childY, childWidth);
-                if (childLayout) {
-                    childLayout->prevSibling = layoutNode->lastChild;
-                    if (layoutNode->lastChild) {
-                        layoutNode->lastChild->nextSibling = childLayout;
-                    } else {
-                        layoutNode->firstChild = childLayout;
-                    }
-                    layoutNode->lastChild = childLayout;
-                    childY = childLayout->y + childLayout->height;
+                childLayout = buildLayout(child, layoutNode, childX, childY, childWidth);
+            } else if (child->nodeType == html::NodeType::Text) {
+                childLayout = new LayoutNode();
+                childLayout->parent = layoutNode;
+                childLayout->x = childX;
+                childLayout->y = childY;
+                childLayout->width = childWidth;
+                childLayout->isBlock = false;
+                childLayout->height = 16;
+            }
+
+            if (childLayout) {
+                childLayout->prevSibling = layoutNode->lastChild;
+                if (layoutNode->lastChild) {
+                    layoutNode->lastChild->nextSibling = childLayout;
+                } else {
+                    layoutNode->firstChild = childLayout;
                 }
+                layoutNode->lastChild = childLayout;
+                childY = childLayout->y + childLayout->height;
             }
         }
 
