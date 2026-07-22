@@ -14,6 +14,8 @@
 #include "js/VM.h"
 #include "js/QuickJS.h"
 #include "css/CSSParser.h"
+#include "layout/LayoutNode.h"
+#include "layout/Box.h"
 #include "util/Logging.h"
 #include "util/String.h"
 
@@ -31,7 +33,23 @@ Tab::Tab(const std::string& initialUrl) {
     if (!initialUrl.empty()) navigate(initialUrl);
 }
 
+// ── layout tree helpers ─────────────────────────────────────────────────────
+
+namespace {
+
+static void deleteLayoutTree(layout::LayoutNode* root) {
+    if (!root) return;
+    for (layout::LayoutNode* child = root->firstChild; child; child = child->nextSibling) {
+        deleteLayoutTree(child);
+    }
+    delete root;
+}
+
+} // anonymous namespace
+
 Tab::~Tab() {
+    deleteLayoutTree(layoutRoot_);
+    layoutRoot_ = nullptr;
     if (js_) quickjs::JS_FreeContext(js_);
     if (rt_) quickjs::JS_FreeRuntime(rt_);
 }
@@ -140,6 +158,8 @@ std::string Tab::title() const {
 }
 
 void Tab::clear() {
+    deleteLayoutTree(layoutRoot_);
+    layoutRoot_ = nullptr;
     document_.reset();
     vm_.reset();
     if (js_) { quickjs::JS_FreeContext(js_); js_ = nullptr; }
@@ -514,8 +534,11 @@ void Tab::cascadeStyles() {
 }
 
 void Tab::performLayout() {
-    // Stub
-    (void)document_;
+    if (!document_) {
+        layoutRoot_ = nullptr;
+        return;
+    }
+    layoutRoot_ = layout::Box::layout(document_.get());
 }
 
 void Tab::paintFrame() {
