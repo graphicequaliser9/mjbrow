@@ -96,6 +96,7 @@ add_executable(JSTest
     src/html/HTMLParser.cpp
     src/html/TreeBuilder.cpp
     src/css/CSSParser.cpp
+    src/layout/Box.cpp
     src/net/HttpClient.cpp
     src/util/String.cpp
     src/util/Memory.cpp
@@ -145,6 +146,7 @@ add_executable(StyleRenderTest
     src/js/QuickJS.cpp
     src/js/VM.cpp
     src/net/HttpClient.cpp
+    src/layout/Box.cpp
     src/util/String.cpp
     src/util/Memory.cpp
     src/util/Logging.cpp

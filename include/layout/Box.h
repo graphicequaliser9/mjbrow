@@ -8,6 +8,10 @@
 #ifndef LAYOUT_BOX_H
 #define LAYOUT_BOX_H
 
+#include "layout/LayoutNode.h"
+
+namespace html { class DOMNode; }
+
 namespace layout {
 
 class Box {
@@ -15,9 +19,7 @@ public:
     Box();
     ~Box();
 
-    /// @brief Layout engine entry point.
-    /// @param root The root DOM node.
-    void layout(class DOMNode* root);
+    static LayoutNode* layout(html::DOMNode* root);
 
 private:
     // Placeholder for internal state

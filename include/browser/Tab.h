@@ -22,6 +22,10 @@ namespace html { class DOMNode; }
 namespace js   { class VM; }
 namespace quickjs { struct JSRuntime; struct JSContext; struct JSObject; }
 namespace css  { class CSSParser; class ComputedStyle; }
+namespace layout {
+class LayoutNode;
+class Box;
+}
 
 namespace browser {
 
@@ -89,6 +93,11 @@ void goBack()    { /* TODO: history */ navigate(url_); }
      * @brief Returns the root DOM node (or nullptr if no document loaded).
      */
     html::DOMNode* document() const { return document_.get(); }
+
+    /**
+     * @brief Returns the root of the layout tree (or nullptr before first layout).
+     */
+    const layout::LayoutNode* layoutRoot() const { return layoutRoot_; }
 
     std::string bodyText() const { return bodyText_; }
 
@@ -175,6 +184,7 @@ private:
     std::unique_ptr<html::Document> document_; ///< Owned parsed document
     std::unique_ptr<js::VM> vm_;            ///< Per-tab JS engine (legacy stub retained)
     WebView  webView_;                     ///< Viewport + scroll state
+    layout::LayoutNode* layoutRoot_{nullptr};  ///< Root of the positioned layout tree
     bool     loading_{true};               ///< True until first paint completes
     double   paintUs_{0.0};                ///< Last paint duration (us)
     double   layoutUs_{0.0};               ///< Last layout duration (us)
