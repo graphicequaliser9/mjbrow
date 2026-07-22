@@ -388,8 +388,25 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
                     SelectObject(hdc, hOld);
                     DeleteObject(hFont);
                     y = rc.bottom + 2;
-                } else if (node->nodeType == html::NodeType::Element) {
-                    css::ComputedStyle style = css::Cascade::computeStyle(node, doc);
+                 } else if (node->nodeType == html::NodeType::Element) {
+                     if (node->tagName == "title") {
+                         std::string title;
+                         for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
+                             if (c->nodeType == html::NodeType::Text) {
+                                 title += c->textContent;
+                             }
+                         }
+                         if (window_) {
+                             int size_needed = MultiByteToWideChar(CP_UTF8, 0, title.c_str(), (int)title.size(), nullptr, 0);
+                             std::wstring titleW(size_needed, 0);
+                             MultiByteToWideChar(CP_UTF8, 0, title.c_str(), (int)title.size(), &titleW[0], size_needed);
+                             SetWindowTextW(window_->hwnd(), titleW.c_str());
+                         }
+                         return;
+                     }
+                     if (node->tagName == "style" || node->tagName == "script") return;
+
+                     css::ComputedStyle style = css::Cascade::computeStyle(node, doc);
                     if (style.display == css::ComputedStyle::None) return;
 
                     static const std::vector<std::string> blocks = {
