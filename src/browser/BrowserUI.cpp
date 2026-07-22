@@ -11,6 +11,7 @@
 #include "devtools/DOMInspector.h"
 #include "devtools/PaintProfiler.h"
 #include "core/Win32Window.h"
+#include "layout/LayoutNode.h"
 #include "html/DOMNode.h"
 #include "css/Cascade.h"
 #include "util/Logging.h"
@@ -328,160 +329,173 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
             return;
         }
 
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, RGB(0, 0, 0));
-
-        html::DOMNode* root = doc;
-        for (html::DOMNode* c = doc->firstChild; c; c = c->nextSibling) {
-            if (c->nodeType == html::NodeType::Element && c->tagName == "html") {
-                root = c;
-                break;
-            }
-        }
-
-        if (!root || !root->firstChild) {
+        const layout::LayoutNode* root = tab->layoutRoot();
+        if (!root) {
+            SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, RGB(128, 0, 0));
-            DrawTextA(hdc, "DOM tree is empty", -1, &rcClip, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            DrawTextA(hdc, "No layout tree (layoutRoot=null)", -1, &rcClip, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             return;
         }
 
-        std::function<void(html::DOMNode*, const css::ComputedStyle*, int, int, int, int&)> renderNode =
-            [&](html::DOMNode* node, const css::ComputedStyle* parentStyle, int indent, int padLeft, int padRight, int& y) {
-                if (!node) return;
-                const int left = rcClip.left + 12 + indent * 16 + padLeft;
-                const int right = rcClip.right - 12 - padRight;
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(0, 0, 0));
 
-                if (node->nodeType == html::NodeType::Text) {
-                    std::string text = node->textContent;
-                    bool onlyWs = true;
-                    for (char ch : text) if (!std::isspace(static_cast<unsigned char>(ch))) { onlyWs = false; break; }
-                    if (onlyWs) return;
+        std::function<void(const layout::LayoutNode*)> renderNode =
+            [&](const layout::LayoutNode* node) {
+                if (!node || !node->domNode) return;
 
-                    const css::ComputedStyle* style = parentStyle ? parentStyle : &css::ComputedStyle{};
-                    int weight = style->fontWeight;
-                    if (weight < 400) weight = 400;
-                    if (weight > 900) weight = 900;
-                    HFONT hFont = CreateFontA(
-                        -static_cast<int>(style->fontSize),
-                        0, 0, 0, weight,
-                        FALSE, FALSE, FALSE,
-                        DEFAULT_CHARSET,
-                        OUT_DEFAULT_PRECIS,
-                        CLIP_DEFAULT_PRECIS,
-                        DEFAULT_QUALITY,
-                        DEFAULT_PITCH | FF_DONTCARE,
-                        style->fontFamily.c_str()
-                    );
-                    HFONT hOld = static_cast<HFONT>(SelectObject(hdc, hFont));
-                    SetTextColor(hdc, RGB(
-                        (style->color >> 16) & 0xFF,
-                        (style->color >> 8) & 0xFF,
-                        style->color & 0xFF
-                    ));
-                    RECT rc{left, y, right, rcClip.bottom};
-                    UINT flags = DT_TOP | DT_WORDBREAK | DT_CALCRECT;
-                    if (style->textAlign == css::ComputedStyle::AlignCenter) flags |= DT_CENTER;
-                    else if (style->textAlign == css::ComputedStyle::AlignRight) flags |= DT_RIGHT;
-                    else flags |= DT_LEFT;
-                    DrawTextA(hdc, text.c_str(), -1, &rc, flags);
-                    DrawTextA(hdc, text.c_str(), -1, &rc, flags & ~DT_CALCRECT);
-                    SelectObject(hdc, hOld);
-                    DeleteObject(hFont);
-                    y = rc.bottom + 2;
-                 } else if (node->nodeType == html::NodeType::Element) {
-                     if (node->tagName == "title") {
-                         std::string title;
-                         for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
-                             if (c->nodeType == html::NodeType::Text) {
-                                 title += c->textContent;
-                             }
-                         }
-                         if (window_) {
-                             int size_needed = MultiByteToWideChar(CP_UTF8, 0, title.c_str(), (int)title.size(), nullptr, 0);
-                             std::wstring titleW(size_needed, 0);
-                             MultiByteToWideChar(CP_UTF8, 0, title.c_str(), (int)title.size(), &titleW[0], size_needed);
-                             SetWindowTextW(window_->hwnd(), titleW.c_str());
-                         }
-                         return;
-                     }
-                     if (node->tagName == "style" || node->tagName == "script") return;
+                auto* domNode = node->domNode;
 
-                     css::ComputedStyle style = css::Cascade::computeStyle(node, doc);
+                if (domNode->nodeType == html::NodeType::Element) {
+                    if (domNode->tagName == "title") {
+                        std::string title;
+                        for (html::DOMNode* c = domNode->firstChild; c; c = c->nextSibling) {
+                            if (c->nodeType == html::NodeType::Text) {
+                                title += c->textContent;
+                            }
+                        }
+                        if (window_) {
+                            int size_needed = MultiByteToWideChar(CP_UTF8, 0, title.c_str(), (int)title.size(), nullptr, 0);
+                            std::wstring titleW(size_needed, 0);
+                            MultiByteToWideChar(CP_UTF8, 0, title.c_str(), (int)title.size(), &titleW[0], size_needed);
+                            SetWindowTextW(window_->hwnd(), titleW.c_str());
+                        }
+                        return;
+                    }
+                    if (domNode->tagName == "style" || domNode->tagName == "script") return;
+
+                    css::ComputedStyle style = css::Cascade::computeStyle(domNode, doc);
                     if (style.display == css::ComputedStyle::None) return;
 
-                    static const std::vector<std::string> blocks = {
-                        "html","head","body","div","p","section","article","header","footer",
-                        "ul","ol","li","table","thead","tbody","tfoot","tr","td","th","blockquote"
-                    };
-                    bool isBlock = false;
-                    for (const auto& b : blocks) if (node->tagName == b) { isBlock = true; break; }
+                    bool isBlock = node->isBlock;
 
                     if (isBlock) {
-                        int startY = y;
-                        y += static_cast<int>(style.marginTop);
-                        int childPadLeft = padLeft + static_cast<int>(style.paddingLeft);
-                        int childPadRight = padRight + static_cast<int>(style.paddingRight);
-                        int childIndent = (node->tagName == "td" || node->tagName == "th") ? 0 : 1;
-                        for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
-                            renderNode(c, &style, indent + childIndent, childPadLeft, childPadRight, y);
+                        int left = node->x;
+                        int top = node->y;
+                        int right = node->x + node->width;
+                        int bottom = node->y + node->height;
+
+                        RECT boxRc{left, top, right, bottom};
+                        if (style.backgroundColor != 0x00000000) {
+                            HBRUSH hbrBg = CreateSolidBrush(RGB(
+                                (style.backgroundColor >> 16) & 0xFF,
+                                (style.backgroundColor >> 8) & 0xFF,
+                                style.backgroundColor & 0xFF
+                            ));
+                            FillRect(hdc, &boxRc, hbrBg);
+                            DeleteObject(hbrBg);
                         }
-                        RECT boxRc{left, startY, right, y + static_cast<int>(style.paddingBottom)};
-                        if (boxRc.bottom > boxRc.top) {
-                            if (style.backgroundColor != 0x00000000) {
-                                HBRUSH hbrBg = CreateSolidBrush(RGB(
-                                    (style.backgroundColor >> 16) & 0xFF,
-                                    (style.backgroundColor >> 8) & 0xFF,
-                                    style.backgroundColor & 0xFF
-                                ));
-                                FillRect(hdc, &boxRc, hbrBg);
-                                DeleteObject(hbrBg);
+                        if (style.borderTop > 0 || style.borderRight > 0 ||
+                            style.borderBottom > 0 || style.borderLeft > 0) {
+                            HBRUSH hbrBorder = CreateSolidBrush(RGB(
+                                (style.borderColor >> 16) & 0xFF,
+                                (style.borderColor >> 8) & 0xFF,
+                                style.borderColor & 0xFF
+                            ));
+                            if (style.borderTop > 0) {
+                                RECT topRc{boxRc.left, boxRc.top, boxRc.right, boxRc.top + static_cast<int>(style.borderTop)};
+                                FillRect(hdc, &topRc, hbrBorder);
                             }
-                            if (style.borderTop > 0 || style.borderRight > 0 ||
-                                style.borderBottom > 0 || style.borderLeft > 0) {
-                                HBRUSH hbrBorder = CreateSolidBrush(RGB(
-                                    (style.borderColor >> 16) & 0xFF,
-                                    (style.borderColor >> 8) & 0xFF,
-                                    style.borderColor & 0xFF
-                                ));
-                                if (style.borderTop > 0) {
-                                    RECT topRc{boxRc.left, boxRc.top, boxRc.right, boxRc.top + static_cast<int>(style.borderTop)};
-                                    FillRect(hdc, &topRc, hbrBorder);
-                                }
-                                if (style.borderRight > 0) {
-                                    RECT rightRc{boxRc.right - static_cast<int>(style.borderRight), boxRc.top, boxRc.right, boxRc.bottom};
-                                    FillRect(hdc, &rightRc, hbrBorder);
-                                }
-                                if (style.borderBottom > 0) {
-                                    RECT bottomRc{boxRc.left, boxRc.bottom - static_cast<int>(style.borderBottom), boxRc.right, boxRc.bottom};
-                                    FillRect(hdc, &bottomRc, hbrBorder);
-                                }
-                                if (style.borderLeft > 0) {
-                                    RECT leftRc{boxRc.left, boxRc.top, boxRc.left + static_cast<int>(style.borderLeft), boxRc.bottom};
-                                    FillRect(hdc, &leftRc, hbrBorder);
-                                }
-                                DeleteObject(hbrBorder);
-                            } else {
-                                HBRUSH hbrBox = CreateSolidBrush(RGB(150, 175, 200));
-                                FrameRect(hdc, &boxRc, hbrBox);
-                                DeleteObject(hbrBox);
+                            if (style.borderRight > 0) {
+                                RECT rightRc{boxRc.right - static_cast<int>(style.borderRight), boxRc.top, boxRc.right, boxRc.bottom};
+                                FillRect(hdc, &rightRc, hbrBorder);
+                            }
+                            if (style.borderBottom > 0) {
+                                RECT bottomRc{boxRc.left, boxRc.bottom - static_cast<int>(style.borderBottom), boxRc.right, boxRc.bottom};
+                                FillRect(hdc, &bottomRc, hbrBorder);
+                            }
+                            if (style.borderLeft > 0) {
+                                RECT leftRc{boxRc.left, boxRc.top, boxRc.left + static_cast<int>(style.borderLeft), boxRc.bottom};
+                                FillRect(hdc, &leftRc, hbrBorder);
+                            }
+                            DeleteObject(hbrBorder);
+                        } else {
+                            HBRUSH hbrBox = CreateSolidBrush(RGB(150, 175, 200));
+                            FrameRect(hdc, &boxRc, hbrBox);
+                            DeleteObject(hbrBox);
+                        }
+
+                        int px = static_cast<int>(style.paddingLeft);
+                        int py = static_cast<int>(style.paddingTop);
+                        int pw = static_cast<int>(style.paddingRight);
+                        int pb = static_cast<int>(style.paddingBottom);
+                        int cx = left + px;
+                        int cy = top + py;
+                        int cright = right - pw;
+                        int cbottom = bottom - pb;
+                        int cw = cright - cx;
+                        int ch = cbottom - cy;
+
+                        if (cw > 0 && ch > 0) {
+                            int textY = cy;
+                            std::function<void(html::DOMNode*, const css::ComputedStyle&)> drawTextNode =
+                                [&](html::DOMNode* dn, const css::ComputedStyle& parentStyle) {
+                                    if (!dn) return;
+                                    if (dn->nodeType == html::NodeType::Text) {
+                                        std::string text = dn->textContent;
+                                        bool onlyWs = true;
+                                        for (char c : text) if (!std::isspace(static_cast<unsigned char>(c))) { onlyWs = false; break; }
+                                        if (onlyWs) return;
+
+                                        const css::ComputedStyle* style = &parentStyle;
+                                        int weight = style->fontWeight;
+                                        if (weight < 400) weight = 400;
+                                        if (weight > 900) weight = 900;
+                                        HFONT hFont = CreateFontA(
+                                            -static_cast<int>(style->fontSize),
+                                            0, 0, 0, weight,
+                                            FALSE, FALSE, FALSE,
+                                            DEFAULT_CHARSET,
+                                            OUT_DEFAULT_PRECIS,
+                                            CLIP_DEFAULT_PRECIS,
+                                            DEFAULT_QUALITY,
+                                            DEFAULT_PITCH | FF_DONTCARE,
+                                            style->fontFamily.c_str()
+                                        );
+                                        HFONT hOld = static_cast<HFONT>(SelectObject(hdc, hFont));
+                                        SetTextColor(hdc, RGB(
+                                            (style->color >> 16) & 0xFF,
+                                            (style->color >> 8) & 0xFF,
+                                            style->color & 0xFF
+                                        ));
+                                        RECT rc{cx, textY, cright, cbottom};
+                                        UINT flags = DT_TOP | DT_WORDBREAK | DT_CALCRECT;
+                                        if (style->textAlign == css::ComputedStyle::AlignCenter) flags |= DT_CENTER;
+                                        else if (style->textAlign == css::ComputedStyle::AlignRight) flags |= DT_RIGHT;
+                                        else flags |= DT_LEFT;
+                                        DrawTextA(hdc, text.c_str(), -1, &rc, flags);
+                                        DrawTextA(hdc, text.c_str(), -1, &rc, flags & ~DT_CALCRECT);
+                                        SelectObject(hdc, hOld);
+                                        DeleteObject(hFont);
+                                        textY = rc.bottom + 2;
+                                    } else if (dn->nodeType == html::NodeType::Element) {
+                                        if (dn->tagName == "style" || dn->tagName == "script" || dn->tagName == "title") return;
+                                        css::ComputedStyle childStyle = css::Cascade::computeStyle(dn, doc);
+                                        if (childStyle.display == css::ComputedStyle::None) return;
+                                        if (childStyle.display == css::ComputedStyle::Block) return;
+                                        for (html::DOMNode* c = dn->firstChild; c; c = c->nextSibling) {
+                                            drawTextNode(c, childStyle);
+                                        }
+                                    }
+                                };
+
+                            for (html::DOMNode* c = domNode->firstChild; c; c = c->nextSibling) {
+                                drawTextNode(c, style);
                             }
                         }
-                        y += static_cast<int>(style.marginBottom) + 4;
+
+                        for (const layout::LayoutNode* child = node->firstChild; child; child = child->nextSibling) {
+                            renderNode(child);
+                        }
                     } else {
-                        for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
-                            renderNode(c, &style, 0, padLeft, padRight, y);
+                        for (const layout::LayoutNode* child = node->firstChild; child; child = child->nextSibling) {
+                            renderNode(child);
                         }
-                    }
-                } else {
-                    css::ComputedStyle style = css::Cascade::computeStyle(node, doc);
-                    for (html::DOMNode* c = node->firstChild; c; c = c->nextSibling) {
-                        renderNode(c, &style, indent, padLeft, padRight, y);
                     }
                 }
             };
 
-        int y = rcClip.top + 12;
-        renderNode(root, nullptr, 0, 0, 0, y);
+        renderNode(root);
     }
 }
 

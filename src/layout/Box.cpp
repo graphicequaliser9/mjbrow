@@ -21,6 +21,7 @@ static LayoutNode* buildLayout(html::DOMNode* domNode, LayoutNode* parent, int x
 
     LayoutNode* layoutNode = new LayoutNode();
     layoutNode->parent = parent;
+    layoutNode->domNode = domNode;
     layoutNode->x = x;
     layoutNode->y = y;
     layoutNode->width = width;
