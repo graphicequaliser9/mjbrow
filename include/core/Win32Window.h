@@ -25,6 +25,7 @@ public:
     ~Win32Window();
 
     int run();
+    HWND hwnd() const { return hwnd_; }
 
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
