@@ -126,52 +126,6 @@ static LayoutNode* buildLayout(html::DOMNode* domNode, LayoutNode* parent, int x
     return layoutNode;
 }
 
-    if (domNode->nodeType == html::NodeType::Element) {
-        if (domNode->tagName == "head") {
-            delete layoutNode;
-            return nullptr;
-        }
-
-        layoutNode->isBlock = true;
-
-        int childY = y;
-        int childX = x;
-        int childWidth = width;
-
-        if (domNode->tagName == "body") {
-            childX = x;
-            childWidth = width;
-        }
-
-        for (html::DOMNode* child = domNode->firstChild; child; child = child->nextSibling) {
-            if (child->nodeType == html::NodeType::Element) {
-                LayoutNode* childLayout = buildLayout(child, layoutNode, childX, childY, childWidth);
-                if (childLayout) {
-                    childLayout->prevSibling = layoutNode->lastChild;
-                    if (layoutNode->lastChild) {
-                        layoutNode->lastChild->nextSibling = childLayout;
-                    } else {
-                        layoutNode->firstChild = childLayout;
-                    }
-                    layoutNode->lastChild = childLayout;
-                    childY = childLayout->y + childLayout->height;
-                }
-            }
-        }
-
-        if (layoutNode->lastChild) {
-            layoutNode->height = layoutNode->lastChild->y + layoutNode->lastChild->height - y;
-        } else {
-            layoutNode->height = 0;
-        }
-    } else {
-        layoutNode->isBlock = false;
-        layoutNode->height = 0;
-    }
-
-    return layoutNode;
-}
-
 LayoutNode* Box::layout(html::DOMNode* root) {
     if (!root) return nullptr;
 
