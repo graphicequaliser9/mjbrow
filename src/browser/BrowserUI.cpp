@@ -427,69 +427,50 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
                         int ch = cbottom - cy;
 
                         if (cw > 0 && ch > 0) {
-                            int textY = cy;
-                            std::function<void(html::DOMNode*, const css::ComputedStyle&)> drawTextNode =
-                                [&](html::DOMNode* dn, const css::ComputedStyle& parentStyle) {
-                                    if (!dn) return;
-                                    if (dn->nodeType == html::NodeType::Text) {
-                                        std::string text = dn->textContent;
-                                        bool onlyWs = true;
-                                        for (char c : text) if (!std::isspace(static_cast<unsigned char>(c))) { onlyWs = false; break; }
-                                        if (onlyWs) return;
-
-                                        const css::ComputedStyle* style = &parentStyle;
-                                        int weight = style->fontWeight;
-                                        if (weight < 400) weight = 400;
-                                        if (weight > 900) weight = 900;
-                                        HFONT hFont = CreateFontA(
-                                            -static_cast<int>(style->fontSize),
-                                            0, 0, 0, weight,
-                                            FALSE, FALSE, FALSE,
-                                            DEFAULT_CHARSET,
-                                            OUT_DEFAULT_PRECIS,
-                                            CLIP_DEFAULT_PRECIS,
-                                            DEFAULT_QUALITY,
-                                            DEFAULT_PITCH | FF_DONTCARE,
-                                            style->fontFamily.c_str()
-                                        );
-                                        HFONT hOld = static_cast<HFONT>(SelectObject(hdc, hFont));
-                                        SetTextColor(hdc, RGB(
-                                            (style->color >> 16) & 0xFF,
-                                            (style->color >> 8) & 0xFF,
-                                            style->color & 0xFF
-                                        ));
-                                        RECT rc{cx, textY, cright, cbottom};
-                                        UINT flags = DT_TOP | DT_WORDBREAK | DT_CALCRECT;
-                                        if (style->textAlign == css::ComputedStyle::AlignCenter) flags |= DT_CENTER;
-                                        else if (style->textAlign == css::ComputedStyle::AlignRight) flags |= DT_RIGHT;
-                                        else flags |= DT_LEFT;
-                                        DrawTextA(hdc, text.c_str(), -1, &rc, flags);
-                                        DrawTextA(hdc, text.c_str(), -1, &rc, flags & ~DT_CALCRECT);
-                                        SelectObject(hdc, hOld);
-                                        DeleteObject(hFont);
-                                        textY = rc.bottom + 2;
-                                    } else if (dn->nodeType == html::NodeType::Element) {
-                                        if (dn->tagName == "style" || dn->tagName == "script" || dn->tagName == "title") return;
-                                        css::ComputedStyle childStyle = css::Cascade::computeStyle(dn, doc);
-                                        if (childStyle.display == css::ComputedStyle::None) return;
-                                        if (childStyle.display == css::ComputedStyle::Block) return;
-                                        for (html::DOMNode* c = dn->firstChild; c; c = c->nextSibling) {
-                                            drawTextNode(c, childStyle);
-                                        }
-                                    }
-                                };
-
-                            for (html::DOMNode* c = domNode->firstChild; c; c = c->nextSibling) {
-                                drawTextNode(c, style);
+                            for (const layout::LayoutNode* child = node->firstChild; child; child = child->nextSibling) {
+                                renderNode(child);
                             }
                         }
-
-                        for (const layout::LayoutNode* child = node->firstChild; child; child = child->nextSibling) {
-                            renderNode(child);
-                        }
                     } else {
-                        for (const layout::LayoutNode* child = node->firstChild; child; child = child->nextSibling) {
-                            renderNode(child);
+                        if (node->domNode && node->domNode->nodeType == html::NodeType::Text) {
+                            std::string text = node->domNode->textContent;
+                            bool onlyWs = true;
+                            for (char ch : text) if (!std::isspace(static_cast<unsigned char>(ch))) { onlyWs = false; break; }
+                            if (!onlyWs) {
+                                int weight = style.fontWeight;
+                                if (weight < 400) weight = 400;
+                                if (weight > 900) weight = 900;
+                                HFONT hFont = CreateFontA(
+                                    -static_cast<int>(style.fontSize),
+                                    0, 0, 0, weight,
+                                    FALSE, FALSE, FALSE,
+                                    DEFAULT_CHARSET,
+                                    OUT_DEFAULT_PRECIS,
+                                    CLIP_DEFAULT_PRECIS,
+                                    DEFAULT_QUALITY,
+                                    DEFAULT_PITCH | FF_DONTCARE,
+                                    style.fontFamily.c_str()
+                                );
+                                HFONT hOld = static_cast<HFONT>(SelectObject(hdc, hFont));
+                                SetTextColor(hdc, RGB(
+                                    (style.color >> 16) & 0xFF,
+                                    (style.color >> 8) & 0xFF,
+                                    style.color & 0xFF
+                                ));
+                                RECT rc{left, top, right, bottom};
+                                UINT flags = DT_TOP | DT_WORDBREAK | DT_CALCRECT;
+                                if (style.textAlign == css::ComputedStyle::AlignCenter) flags |= DT_CENTER;
+                                else if (style.textAlign == css::ComputedStyle::AlignRight) flags |= DT_RIGHT;
+                                else flags |= DT_LEFT;
+                                DrawTextA(hdc, text.c_str(), -1, &rc, flags);
+                                DrawTextA(hdc, text.c_str(), -1, &rc, flags & ~DT_CALCRECT);
+                                SelectObject(hdc, hOld);
+                                DeleteObject(hFont);
+                            }
+                        } else {
+                            for (const layout::LayoutNode* child = node->firstChild; child; child = child->nextSibling) {
+                                renderNode(child);
+                            }
                         }
                     }
                 }
