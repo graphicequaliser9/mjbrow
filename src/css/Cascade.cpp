@@ -411,9 +411,9 @@ ComputedStyle Cascade::computeStyle(const html::DOMNode* element, const html::Do
         if (s[0] == '#') {
             unsigned int hex = 0;
             if (s.size() == 4) {
-                hex = (std::stoi(s.substr(1,1) + s.substr(1,1), nullptr, 16) << 16) |
-                      (std::stoi(s.substr(2,1) + s.substr(2,1), nullptr, 16) << 8)  |
-                       std::stoi(s.substr(3,1) + s.substr(3,1), nullptr, 16);
+                hex = (std::stoi(std::string(1, s[1]) + std::string(1, s[1]), nullptr, 16) << 16) |
+                      (std::stoi(std::string(1, s[2]) + std::string(1, s[2]), nullptr, 16) << 8)  |
+                       std::stoi(std::string(1, s[3]) + std::string(1, s[3]), nullptr, 16);
             } else if (s.size() == 7) {
                 hex = std::stoi(s.substr(1), nullptr, 16);
             } else if (s.size() == 9) {
