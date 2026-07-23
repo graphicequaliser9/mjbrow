@@ -39,8 +39,10 @@ namespace {
 
 static void deleteLayoutTree(layout::LayoutNode* root) {
     if (!root) return;
-    for (layout::LayoutNode* child = root->firstChild; child; child = child->nextSibling) {
+    for (layout::LayoutNode* child = root->firstChild; child; ) {
+        layout::LayoutNode* next = child->nextSibling;
         deleteLayoutTree(child);
+        child = next;
     }
     delete root;
 }
