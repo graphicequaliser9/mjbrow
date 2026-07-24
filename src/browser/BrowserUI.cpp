@@ -340,6 +340,19 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, RGB(0, 0, 0));
 
+        int scrollOffset = 0;
+        if (tab->webView()) {
+            scrollOffset = tab->webView()->scrollY;
+        }
+        RECT rcClient = rcClip;
+        if (window_) {
+            GetClientRect(window_->hwnd(), &rcClient);
+        }
+        int viewportHeight = rcClient.bottom - rcClient.top;
+        int maxScroll = std::max(0, static_cast<int>(root->height) - viewportHeight);
+        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+        if (scrollOffset < 0) scrollOffset = 0;
+
         std::function<void(const layout::LayoutNode*)> renderNode =
             [&](const layout::LayoutNode* node) {
                 if (!node || !node->domNode) return;
@@ -370,10 +383,15 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
                     bool isBlock = node->isBlock;
 
                     if (isBlock) {
+                        int nodeBottom = node->y + node->height;
+                        if (nodeBottom <= scrollOffset || node->y >= scrollOffset + viewportHeight) {
+                            return;
+                        }
+
                         int left = node->x;
-                        int top = node->y;
+                        int top = node->y - scrollOffset;
                         int right = node->x + node->width;
-                        int bottom = node->y + node->height;
+                        int bottom = node->y + node->height - scrollOffset;
 
                         RECT boxRc{left, top, right, bottom};
                         if (style.backgroundColor != 0x00000000) {
@@ -432,6 +450,7 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
                                 [&](html::DOMNode* dn, const css::ComputedStyle& parentStyle) {
                                     if (!dn) return;
                                     if (dn->nodeType == html::NodeType::Text) {
+                                        if (textY >= viewportHeight) return;
                                         std::string text = dn->textContent;
                                         bool onlyWs = true;
                                         for (char c : text) if (!std::isspace(static_cast<unsigned char>(c))) { onlyWs = false; break; }
