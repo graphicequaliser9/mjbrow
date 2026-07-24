@@ -341,7 +341,11 @@ void BrowserUI::renderPage(HDC hdc, RECT rcClip) {
         SetTextColor(hdc, RGB(0, 0, 0));
 
         int scrollOffset = tab->scrollOffsetY();
-        int viewportHeight = rcClip.bottom - rcClip.top;
+        RECT rcClient = rcClip;
+        if (window_) {
+            GetClientRect(window_->hwnd(), &rcClient);
+        }
+        int viewportHeight = rcClient.bottom - rcClient.top;
         int maxScroll = std::max(0, static_cast<int>(root->height) - viewportHeight);
         if (scrollOffset > maxScroll) scrollOffset = maxScroll;
         if (scrollOffset < 0) scrollOffset = 0;

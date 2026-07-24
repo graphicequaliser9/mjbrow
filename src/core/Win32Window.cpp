@@ -172,6 +172,7 @@ LRESULT CALLBACK Win32Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             if (auto* tab = self->ui_->activeTab()) {
                 int delta = GET_WHEEL_DELTA_WPARAM(wParam);
                 tab->setScrollOffsetY(tab->scrollOffsetY() + (delta / WHEEL_DELTA) * 40);
+                InvalidateRect(hwnd, nullptr, FALSE);
             }
         }
         return 0;

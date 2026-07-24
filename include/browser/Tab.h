@@ -102,7 +102,7 @@ void goBack()    { /* TODO: history */ navigate(url_); }
     std::string bodyText() const { return bodyText_; }
 
     int scrollOffsetY() const { return scrollOffsetY_; }
-    void setScrollOffsetY(int y) { scrollOffsetY_ = y; }
+    void setScrollOffsetY(int y) { scrollOffsetY_ = y >= 0 ? y : 0; }
 
     /**
      * @brief Returns the concatenation of every Text node in the document
