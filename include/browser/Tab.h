@@ -101,6 +101,9 @@ void goBack()    { /* TODO: history */ navigate(url_); }
 
     std::string bodyText() const { return bodyText_; }
 
+    int scrollOffsetY() const { return scrollOffsetY_; }
+    void setScrollOffsetY(int y) { scrollOffsetY_ = y; }
+
     /**
      * @brief Returns the concatenation of every Text node in the document
      *        (not just the body), built by walking the full DOM tree.
@@ -189,6 +192,7 @@ private:
     double   paintUs_{0.0};                ///< Last paint duration (us)
     double   layoutUs_{0.0};               ///< Last layout duration (us)
     double   jsUs_{0.0};                    ///< Last JS VM duration (us)
+    int      scrollOffsetY_{0};            ///< Vertical scroll offset in pixels
 
     // ── QuickJS embedding (Bead B) ───────────────────────────────────────────
     quickjs::JSRuntime* rt_{nullptr};      ///< Owned JS runtime

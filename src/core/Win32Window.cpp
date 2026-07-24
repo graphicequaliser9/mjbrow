@@ -167,6 +167,16 @@ LRESULT CALLBACK Win32Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
     case WM_COMMAND:
         return dispatchBrowserCommand(self, static_cast<UINT>(LOWORD(wParam)));
 
+    case WM_MOUSEWHEEL: {
+        if (self && self->ui_) {
+            if (auto* tab = self->ui_->activeTab()) {
+                int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+                tab->setScrollOffsetY(tab->scrollOffsetY() + (delta / WHEEL_DELTA) * 40);
+            }
+        }
+        return 0;
+    }
+
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
